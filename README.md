@@ -1,0 +1,32 @@
+# PaperScope 🔭
+
+**Feed it a paper → get the whole story.**
+
+A single-file web app for paper analytics. Type a paper title (with live autocomplete) or paste a DOI, and PaperScope builds a neo-brutalist dashboard around it:
+
+- 🕸️ **Similar-paper map** — an interactive force-directed network of OpenAlex "related works" plus the topic's most-cited papers. Node size = citations, color = field. Drag nodes, click to open, spotlight a field via the legend, spawn more papers on demand, or flip open a table of all papers ranked by a 0–100 closeness score.
+- 🏆 **Journal rank** — the venue's exact rank among all venues in the paper's subject, shown through two lenses: 2-yr mean citedness (impact-factor cousin) and h-index (harder to game). Top-5 leaderboard included.
+- 🌍 **Who cites it, where** — a dot-grid world map with clickable bubbles for the author countries of every citing paper, plus a top-8 country list linking to the actual papers.
+- 🧑‍🔬 **The citing crew** — profile cards for the most frequent citing authors: institution, country, h-index, works, citations.
+
+Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose broader corpus usually sits closer to Google Scholar's number), with a one-click Google Scholar link. The 🎲 button rolls a random paper from OpenAlex's ~250M-work catalog.
+
+![screenshot](docs_screenshot.png)
+
+## Run it
+
+Open `index.html` in a browser. That's it — no build, no server, no API keys. Data comes live from the free [OpenAlex](https://openalex.org) and [Semantic Scholar](https://www.semanticscholar.org) APIs.
+
+## Host it
+
+It's a static file: drop it on Netlify Drop, GitHub Pages, Vercel, or Cloudflare Pages as `index.html`.
+
+## Dev notes
+
+- `dev/test.js` — Playwright smoke test with mocked API fixtures. Run with `npm i playwright && node dev/test.js` (set `FALLBACK=1` to exercise the API-fallback paths). Adjust the `executablePath` / screenshot paths for your machine.
+- `dev/genmap.js` — regenerates the embedded dot-grid world map + country centroids from `world-atlas` and `world-countries` (`npm i world-atlas@2 topojson-client world-countries && node dev/genmap.js`), producing `mapdata.json` which is inlined into `index.html` as the `MAPDATA` constant.
+- Every remote call has a graceful fallback chain, so a failing endpoint degrades a panel instead of breaking the page.
+
+## Data sources & thanks
+
+[OpenAlex](https://openalex.org) (CC0 scholarly catalog) and [Semantic Scholar](https://api.semanticscholar.org). Map geometry from `world-atlas` (Natural Earth) and `world-countries`.

@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaperScope 🔭 — feed it a paper, get the whole story</title>
+<style>
+  :root{
+    --paper:#FFF8EC; --page:#F5EBD8; --ink:#141414; --muted:#6b6357;
+    --c1:#3A86FF; --c2:#FB5607; --c3:#068F6C; --c4:#C98A00; --c5:#E4569B; --c6:#7B2FBF;
+    --pink:#FFC6DE; --lime:#D8F26E; --sky:#BFE3FF; --peach:#FFD9B8; --lav:#E4D6FF;
+    --bs:7px 7px 0 var(--ink); --bs-sm:4px 4px 0 var(--ink);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--page); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background-image:radial-gradient(rgba(20,20,20,.09) 1.2px, transparent 1.2px);
+    background-size:22px 22px; min-height:100vh;
+  }
+  a{color:inherit;}
+  .wrap{max-width:1180px; margin:0 auto; padding:22px 20px 80px;}
+
+  /* ---------- header ---------- */
+  header{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:26px;}
+  .logo{
+    display:inline-flex; align-items:center; gap:10px; background:var(--ink); color:var(--paper);
+    padding:10px 18px; border:3px solid var(--ink); box-shadow:var(--bs);
+    font-weight:900; font-size:clamp(22px,3.4vw,32px); letter-spacing:-.5px; transform:rotate(-1.2deg);
+  }
+  .logo span.scope{display:inline-block; transform:rotate(8deg); font-size:1.15em;}
+  .tag{
+    background:var(--lime); border:3px solid var(--ink); box-shadow:var(--bs-sm);
+    padding:7px 13px; font-weight:800; font-size:14px; transform:rotate(1deg);
+  }
+  /* ---------- search ---------- */
+  .searchbox{position:relative; margin:0 auto 14px; max-width:820px;}
+  .search-row{display:flex; gap:12px;}
+  .search-row input{
+    flex:1; font:inherit; font-weight:700; font-size:clamp(16px,2.2vw,20px);
+    padding:16px 18px; border:4px solid var(--ink); background:var(--paper);
+    box-shadow:var(--bs); outline:none; min-width:0;
+  }
+  .search-row input:focus{background:#fff; transform:translate(-2px,-2px); box-shadow:9px 9px 0 var(--ink);}
+  .search-row input::placeholder{color:#9a9184; font-weight:600;}
+  button{font:inherit; cursor:pointer;}
+  .btn{
+    border:4px solid var(--ink); background:var(--c2); color:#fff; font-weight:900;
+    font-size:clamp(15px,2vw,18px); padding:0 22px; box-shadow:var(--bs);
+    transition:transform .08s, box-shadow .08s; white-space:nowrap;
+  }
+  .btn:hover{transform:translate(-2px,-2px); box-shadow:9px 9px 0 var(--ink);}
+  .btn:active{transform:translate(5px,5px); box-shadow:1px 1px 0 var(--ink);}
+  .btn.alt{background:var(--pink); color:var(--ink);}
+  .hint{max-width:820px; margin:12px auto 0; font-weight:700; font-size:13px; color:var(--muted); text-align:center;}
+  .hint b{color:var(--ink);}
+
+  .suggest{
+    position:absolute; top:calc(100% + 10px); left:0; right:0; z-index:60;
+    background:var(--paper); border:4px solid var(--ink); box-shadow:var(--bs);
+    max-height:380px; overflow:auto; display:none;
+  }
+  .suggest.open{display:block;}
+  .sug{
+    padding:12px 16px; border-bottom:3px solid var(--ink); cursor:pointer; display:block; width:100%;
+    text-align:left; background:transparent; border-left:none; border-right:none; border-top:none; font:inherit;
+  }
+  .sug:last-child{border-bottom:none;}
+  .sug:hover,.sug.hot{background:var(--sky);}
+  .sug .t{font-weight:800; font-size:15px; line-height:1.25;}
+  .sug .m{font-size:12.5px; color:var(--muted); font-weight:600; margin-top:3px;}
+  .sug .cite-pill{display:inline-block; background:var(--ink); color:var(--paper); font-size:11px; font-weight:800; padding:1px 8px; margin-left:6px; border-radius:99px;}
+
+  /* ---------- status / loading ---------- */
+  #status{max-width:820px; margin:22px auto; display:none;}
+  #status.on{display:block;}
+  .loading-card{
+    background:var(--lav); border:3px solid var(--ink); box-shadow:var(--bs);
+    padding:18px 22px; font-weight:800; font-size:16px; display:flex; gap:14px; align-items:center;
+  }
+  .spinner{width:26px; height:26px; border:4px solid var(--ink); border-right-color:transparent; border-radius:50%; animation:spin .7s linear infinite; flex:none;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err-card{background:#FFD2D2; border:3px solid var(--ink); box-shadow:var(--bs); padding:18px 22px; font-weight:800;}
+
+  /* ---------- hero paper card ---------- */
+  #results{display:none;}
+  #results.on{display:block; animation:pop .35s cubic-bezier(.2,1.6,.4,1);}
+  @keyframes pop{from{transform:scale(.97) translateY(8px); opacity:0}}
+  .hero{
+    background:var(--paper); border:4px solid var(--ink); box-shadow:var(--bs);
+    padding:24px 26px; margin:26px 0 30px; position:relative;
+  }
+  .hero .sticker{
+    position:absolute; top:-16px; right:18px; background:var(--c5); color:#fff;
+    border:3px solid var(--ink); box-shadow:var(--bs-sm); padding:5px 12px;
+    font-weight:900; font-size:13px; transform:rotate(3deg);
+  }
+  .hero h2{font-size:clamp(20px,3vw,28px); font-weight:900; line-height:1.18; letter-spacing:-.3px;}
+  .hero h2 a{text-decoration:none;}
+  .hero h2 a:hover{background:var(--lime); box-shadow:0 0 0 3px var(--lime);}
+  .hero .authors{margin-top:10px; font-weight:700; color:var(--muted); font-size:14.5px; line-height:1.5;}
+  .badges{display:flex; flex-wrap:wrap; gap:10px; margin-top:16px;}
+  .badge{border:3px solid var(--ink); padding:5px 12px; font-weight:800; font-size:13px; background:var(--paper); box-shadow:3px 3px 0 var(--ink);}
+  .badge.y{background:var(--peach);} .badge.c{background:var(--sky);} .badge.v{background:var(--lime);}
+  .badge.t{background:var(--lav);} .badge.oa{background:#C9F7C9;}
+  .badge.gs{background:#fff; text-decoration:none; cursor:pointer;}
+  .badge.gs:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
+  a.badge{text-decoration:none; cursor:pointer;}
+  a.badge:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
+  .brow .nm a, .rank-ctx a, .acard .inst a{text-decoration:none;}
+  .brow .nm a:hover, .rank-ctx a:hover, .acard .inst a:hover{background:var(--sky); box-shadow:0 0 0 2px var(--sky);}
+  a.brow{text-decoration:none; color:inherit;}
+  a.brow:hover .nm{background:var(--sky);}
+
+  /* ---------- grid of panels ---------- */
+  .grid{display:grid; grid-template-columns:repeat(12,1fr); gap:26px;}
+  .panel{
+    background:var(--paper); border:4px solid var(--ink); box-shadow:var(--bs);
+    padding:20px; position:relative; min-width:0;
+  }
+  .panel .ptitle{
+    display:inline-block; background:var(--ink); color:var(--paper); font-weight:900;
+    font-size:15px; padding:6px 14px; border:3px solid var(--ink); box-shadow:4px 4px 0 rgba(20,20,20,.25);
+    transform:rotate(-1deg); margin:-38px 0 14px 0; letter-spacing:.3px;
+  }
+  .psub{font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:12px;}
+  .p-net{grid-column:span 7;} .p-journal{grid-column:span 5;}
+  .p-map{grid-column:span 7;} .p-authors{grid-column:span 5;}
+  @media (max-width:900px){ .p-net,.p-journal,.p-map,.p-authors{grid-column:span 12;} }
+
+  .panel .mini-load{display:flex; gap:10px; align-items:center; font-weight:800; color:var(--muted); padding:26px 4px; font-size:14px;}
+  .panel .mini-load .spinner{width:18px; height:18px; border-width:3px;}
+  .empty{background:var(--pink); border:3px dashed var(--ink); padding:14px; font-weight:800; font-size:14px;}
+
+  canvas{display:block; width:100%;}
+  #net{border:3px solid var(--ink); background:#fff; cursor:grab; touch-action:none;}
+  #worldmap{border:3px solid var(--ink); background:#EAF4FF;}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 14px; margin-top:12px;}
+  .lg{display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:800; background:none; border:none; padding:2px 4px; cursor:pointer; transition:opacity .15s;}
+  .lg i{width:14px; height:14px; border:2.5px solid var(--ink); display:inline-block; flex:none;}
+  .lg:hover{background:var(--sky);}
+  .lg.off{opacity:.25;}
+  .lg.on{background:var(--lime); box-shadow:2px 2px 0 var(--ink);}
+  .netctl{display:flex; gap:12px; margin-top:14px; flex-wrap:wrap;}
+  .btn.mini{font-size:13px; padding:7px 14px; border-width:3px; box-shadow:var(--bs-sm);}
+  .btn.mini:hover{box-shadow:6px 6px 0 var(--ink);}
+  .btn.mini:disabled{opacity:.5; cursor:not-allowed; transform:none; box-shadow:var(--bs-sm);}
+  .btn.tbl{background:var(--lav); color:var(--ink);}
+  .btn.tbl .arr{display:inline-block; transition:transform .15s; font-size:15px;}
+  .btn.tbl.open .arr{transform:rotate(90deg);}
+  #nettable{margin-top:14px; border:3px solid var(--ink); background:#fff; max-height:340px; overflow:auto;}
+  .ntrow{display:grid; grid-template-columns:34px minmax(0,1fr) 88px; gap:8px; align-items:center; padding:9px 12px; border-bottom:2.5px solid var(--ink); font-size:12.5px; font-weight:700; text-decoration:none; color:inherit;}
+  .ntrow:last-child{border-bottom:none;}
+  .ntrow:hover{background:var(--sky);}
+  .ntrow .rk{font-weight:900; font-size:14px;}
+  .ntrow .ti{font-weight:800; line-height:1.25;}
+  .ntrow .meta{color:var(--muted); font-size:11.5px; font-weight:700; margin-top:2px;}
+  .ntrow .kchip{display:inline-block; border:2px solid var(--ink); padding:0 6px; font-size:10px; font-weight:800; margin-right:5px; background:var(--peach);}
+  .ntrow .kchip.rel{background:var(--sky);}
+  .close-wrap{text-align:right;}
+  .close-pct{font-weight:900; font-size:14px;}
+  .close-track{display:block; height:10px; border:2px solid var(--ink); background:#fff; margin-top:3px; position:relative;}
+  .close-fill{position:absolute; inset:0; right:auto; background:var(--c3);}
+
+  /* journal rank */
+  .rank-hero{display:flex; align-items:center; gap:18px; margin-bottom:14px;}
+  .rank-num{
+    background:var(--c4); color:#fff; border:4px solid var(--ink); box-shadow:var(--bs-sm);
+    font-size:clamp(30px,4vw,44px); font-weight:900; padding:8px 18px; transform:rotate(-2deg); line-height:1;
+  }
+  .rank-ctx{font-weight:800; font-size:14px; line-height:1.4;}
+  .rank-ctx .in{color:var(--muted); font-size:12.5px;}
+  .statrow{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 16px;}
+  .stat{border:3px solid var(--ink); background:#fff; padding:8px 12px; box-shadow:3px 3px 0 var(--ink); flex:1; min-width:90px;}
+  .stat .v{font-weight:900; font-size:20px;}
+  .stat .k{font-weight:700; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;}
+  .bars{display:flex; flex-direction:column; gap:7px;}
+  .brow{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; font-size:12.5px; font-weight:700;}
+  .brow .nm{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .brow .nm .pos{color:var(--muted); font-weight:800; margin-right:4px;}
+  .brow .val{font-weight:800; font-variant-numeric:tabular-nums;}
+  .brow .track{grid-column:1/-1; height:14px; border:2.5px solid var(--ink); background:#fff; position:relative;}
+  .brow .fill{position:absolute; inset:0; right:auto; background:var(--c1); border-right:2.5px solid var(--ink);}
+  .brow.me .fill{background:var(--c2);}
+  .brow.me .nm{background:var(--lime); padding:1px 5px; border:2px solid var(--ink); font-weight:900;}
+
+  /* map + countries */
+  .cbars{margin-top:14px;}
+  .flag{font-size:15px; margin-right:5px;}
+
+  /* authors */
+  .acards{display:flex; flex-direction:column; gap:14px;}
+  .acard{
+    border:3px solid var(--ink); background:#fff; box-shadow:var(--bs-sm);
+    padding:12px 14px; display:flex; gap:12px; align-items:flex-start;
+    transition:transform .08s;
+  }
+  .acard:hover{transform:translate(-2px,-2px);}
+  .avatar{
+    width:46px; height:46px; border:3px solid var(--ink); flex:none; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-weight:900; font-size:17px; color:#fff;
+  }
+  .acard .who{min-width:0; flex:1;}
+  .acard .nm{font-weight:900; font-size:15px;}
+  .acard .nm a{text-decoration:none;}
+  .acard .nm a:hover{background:var(--sky);}
+  .acard .inst{font-size:12.5px; color:var(--muted); font-weight:700; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .apills{display:flex; gap:6px; flex-wrap:wrap; margin-top:7px;}
+  .apill{font-size:11px; font-weight:800; border:2.5px solid var(--ink); padding:2px 8px; background:var(--peach);}
+  .apill.h{background:var(--lav);} .apill.n{background:var(--lime);}
+
+  /* tooltip */
+  #tip{
+    position:fixed; z-index:100; pointer-events:none; display:none; max-width:280px;
+    background:var(--ink); color:var(--paper); border:3px solid var(--ink);
+    padding:8px 11px; font-size:12.5px; font-weight:700; line-height:1.4; box-shadow:4px 4px 0 rgba(20,20,20,.3);
+  }
+  #tip .tt{font-weight:900;}
+  #tip .tm{opacity:.75; font-size:11.5px;}
+
+  footer{margin-top:60px; text-align:center; font-weight:700; font-size:13px; color:var(--muted);}
+  footer a{font-weight:800;}
+  .foot-sticker{display:inline-block; background:var(--paper); border:3px solid var(--ink); box-shadow:var(--bs-sm); padding:8px 14px; transform:rotate(-.6deg);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="scope">🔭</span> PaperScope</div>
+    <div class="tag">feed it a paper → get the whole story</div>
+  </header>
+
+  <div class="searchbox">
+    <div class="search-row">
+      <input id="q" type="text" autocomplete="off" spellcheck="false"
+        placeholder="Type a paper title or paste a DOI…" aria-label="Search for a paper">
+      <button class="btn" id="go">Scope it!</button>
+      <button class="btn alt" id="lucky" title="Try a random famous paper">🎲</button>
+    </div>
+    <div class="suggest" id="suggest" role="listbox"></div>
+  </div>
+  <div class="hint">Try <b>“Attention is all you need”</b>, <b>“CRISPR-Cas9”</b>, or paste a DOI like <b>10.1038/nature14539</b> · press 🎲 for pot luck</div>
+
+  <div id="status"></div>
+
+  <div id="results">
+    <div class="hero" id="hero"></div>
+    <div class="grid">
+      <section class="panel p-net">
+        <div class="ptitle">🕸️ SIMILAR-PAPER MAP</div>
+        <div class="psub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = field. Drag nodes! Click to open.</div>
+        <div id="netbox"></div>
+        <div class="legend" id="netlegend"></div>
+        <div class="netctl" id="netctl" style="display:none">
+          <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
+          <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
+        </div>
+        <div id="nettable" style="display:none"></div>
+      </section>
+
+      <section class="panel p-journal">
+        <div class="ptitle">🏆 JOURNAL RANK</div>
+        <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
+        <div id="journal"></div>
+      </section>
+
+      <section class="panel p-map">
+        <div class="ptitle">🌍 WHO CITES IT, WHERE</div>
+        <div class="psub" id="mapsub">Countries of the authors citing this paper.</div>
+        <div id="mapbox"></div>
+        <div class="cbars bars" id="cbars"></div>
+      </section>
+
+      <section class="panel p-authors">
+        <div class="ptitle">🧑‍🔬 THE CITING CREW</div>
+        <div class="psub" id="asub">The researchers who cite this paper most.</div>
+        <div class="acards" id="acards"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
+  </footer>
+</div>
+<div id="tip"></div>
+
+<script>
+/* ============ embedded world map data (generated from world-atlas + world-countries) ============ */
+const MAPDATA = {"grid":{"cols":120,"rows":56,"latTop":78,"latBot":-56,"hexRows":["0000080bcffff80040002003000000","00001000007ff8000003007f800000","00003fb3e03ff000000417fffe3c00","03f8f7d93c3ff0003e00b7ffffffa6","c7ffffffae3f80007fcff7ffffffff","4fffffff3c1c0e00efffffffffffff","07fffff8841c0003dfffffffffffdf","0fe7fff03a000003c3ffffffffff30","0101fff83e000021dfffffffffe0c0","0000ffff3f0000201fffffffff80c0","00007fffbf800073fffffffffff080","00007fffff00002ffffffffffff000","00003ffffcc0003ffffffffffff000","00001fffff00000ffd73ffffffc000","00001ffff8000079b877ffffff9800","00001ffff00000707bf3fffffe0000","00001fffe000007017f3ffffe20000","00001fffe000000f00fffffff26000","000007ffc000007f00fffffff18000","000007ff8000007f9bfffffff90000","000001f0800000fffff7fffff80000","000003f0000001fffef9fffff00000","000000e0000001ffff7e3fffe80000","00000060400003ffff7f1fdf800000","00000072080001ffff3e0f1e800000","0000001e000001ffffbc0e1f080000","00000007000003fffff00607080000","00000001000003ffffc00603000000","000000001f0001fffff80401100000","000000003f0000fffff80000040000","000000003fe00053fff0000c300000","000000003fe00001ffe00002600000","000000007fe00001ffc00006e00000","000000007ff80001ffc00002688000","000000007ffe0000ff800002087000","000000007fff0000ff800001c03800","000000003fff0000ff800000040400","000000003fff00007f800000001000","000000001ffe0000ffc80000039000","000000000ffe0000ff98000007d800","0000000007fe0000ff10000007f800","0000000007fc00007f3000001ffc00","0000000007f800007f1000003ffc00","000000000ff000007e0000003ffe00","000000000ff000007e0000003ffe00","000000000fe000003c0000003ffe00","000000000fc0000038000000187e00","000000000f80000000000000003c00","000000001f80000000000000001802","000000001e00000000000000000002","000000000e00000000000000000004","000000001c00000000000000000008","000000001c00000000000000000000","000000001800000000000000000000","000000001800000000000000000000","000000000c00000000000000000000"]},"centroids":{"AW":[-70,12.5],"AF":[65,33],"AO":[18.5,-12.5],"AI":[-63.2,18.3],"AX":[19.9,60.1],"AL":[20,41],"AD":[1.5,42.5],"AE":[54,24],"AR":[-64,-34],"AM":[45,40],"AS":[-170,-14.3],"AQ":[0,-90],"TF":[69.2,-49.2],"AG":[-61.8,17.1],"AU":[133,-27],"AT":[13.3,47.3],"AZ":[47.5,40.5],"BI":[30,-3.5],"BE":[4,50.8],"BJ":[2.3,9.5],"BF":[-2,13],"BD":[90,24],"BG":[25,43],"BH":[50.6,26],"BS":[-76,24.3],"BA":[18,44],"BL":[-63.4,18.5],"SH":[-5.7,-15.9],"BY":[28,53],"BZ":[-88.7,17.3],"BM":[-64.7,32.3],"BO":[-65,-17],"BQ":[-68.2,12.2],"BR":[-55,-10],"BB":[-59.5,13.2],"BN":[114.7,4.5],"BT":[90.5,27.5],"BV":[3.4,-54.4],"BW":[24,-22],"CF":[21,7],"CA":[-95,60],"CC":[96.8,-12.5],"CH":[8,47],"CL":[-71,-30],"CN":[105,35],"CI":[-5,8],"CM":[12,6],"CD":[25,0],"CG":[15,-1],"CK":[-159.8,-21.2],"CO":[-72,4],"KM":[44.3,-12.2],"CV":[-24,16],"CR":[-84,10],"CU":[-80,21.5],"CW":[-68.9,12.1],"CX":[105.7,-10.5],"KY":[-80.5,19.5],"CY":[33,35],"CZ":[15.5,49.8],"DE":[9,51],"DJ":[43,11.5],"DM":[-61.3,15.4],"DK":[10,56],"DO":[-70.7,19],"DZ":[3,28],"EC":[-77.5,-2],"EG":[30,27],"ER":[39,15],"EH":[-13,24.5],"ES":[-4,40],"EE":[26,59],"ET":[38,8],"FI":[26,64],"FJ":[175,-18],"FK":[-59,-51.7],"FR":[2,46],"FO":[-7,62],"FM":[158.3,6.9],"GA":[11.8,-1],"GB":[-2,54],"GE":[43.5,42],"GG":[-2.6,49.5],"GH":[-2,8],"GI":[-5.3,36.1],"GN":[-10,11],"GP":[-61.6,16.3],"GM":[-16.6,13.5],"GW":[-15,12],"GQ":[10,2],"GR":[22,39],"GD":[-61.7,12.1],"GL":[-40,72],"GT":[-90.2,15.5],"GF":[-53,4],"GU":[144.8,13.5],"GY":[-59,5],"HK":[114.2,22.3],"HM":[72.5,-53.1],"HN":[-86.5,15],"HR":[15.5,45.2],"HT":[-72.4,19],"HU":[20,47],"ID":[120,-5],"IM":[-4.5,54.3],"IN":[77,20],"IO":[71.5,-6],"IE":[-8,53],"IR":[53,32],"IQ":[44,33],"IS":[-18,65],"IL":[35.1,31.5],"IT":[12.8,42.8],"JM":[-77.5,18.3],"JE":[-2.2,49.3],"JO":[36,31],"JP":[138,36],"KZ":[68,48],"KE":[38,1],"KG":[75,41],"KH":[105,13],"KI":[173,1.4],"KN":[-62.7,17.3],"KR":[127.5,37],"XK":[21.2,42.7],"KW":[45.8,29.5],"LA":[105,18],"LB":[35.8,33.8],"LR":[-9.5,6.5],"LY":[17,25],"LC":[-61,13.9],"LI":[9.5,47.3],"LK":[81,7],"LS":[28.5,-29.5],"LT":[24,56],"LU":[6.2,49.8],"LV":[25,57],"MO":[113.6,22.2],"MF":[-63.9,18.1],"MA":[-5,32],"MC":[7.4,43.7],"MD":[29,47],"MG":[47,-20],"MV":[73,3.3],"MX":[-102,23],"MH":[168,9],"MK":[22,41.8],"ML":[-4,17],"MT":[14.6,35.8],"MM":[98,22],"ME":[19.3,42.5],"MN":[105,46],"MP":[145.8,15.2],"MZ":[35,-18.2],"MR":[-12,20],"MS":[-62.2,16.8],"MQ":[-61,14.7],"MU":[57.6,-20.3],"MW":[34,-13.5],"MY":[112.5,2.5],"YT":[45.2,-12.8],"NA":[17,-22],"NC":[165.5,-21.5],"NE":[8,16],"NF":[168,-29],"NG":[8,10],"NI":[-85,13],"NU":[-169.9,-19],"NL":[5.8,52.5],"NO":[10,62],"NP":[84,28],"NR":[166.9,-0.5],"NZ":[174,-41],"OM":[57,21],"PK":[70,30],"PA":[-80,9],"PN":[-130.1,-25.1],"PE":[-76,-10],"PH":[122,13],"PW":[134.5,7.5],"PG":[147,-6],"PL":[20,52],"PR":[-66.5,18.3],"KP":[127,40],"PT":[-8,39.5],"PY":[-58,-23],"PS":[35.2,31.9],"PF":[-140,-15],"QA":[51.3,25.5],"RE":[55.5,-21.1],"RO":[25,46],"RU":[100,60],"RW":[30,-2],"SA":[45,25],"SD":[30,15],"SN":[-14,14],"SG":[103.8,1.4],"GS":[-37,-54.5],"SJ":[20,78],"SB":[159,-8],"SL":[-11.5,8.5],"SV":[-88.9,13.8],"SM":[12.4,43.8],"SO":[49,10],"PM":[-56.3,46.8],"RS":[21,44],"SS":[30,7],"ST":[7,1],"SR":[-56,4],"SK":[19.5,48.7],"SI":[14.8,46.1],"SE":[15,62],"SZ":[31.5,-26.5],"SX":[-63,18],"SC":[55.7,-4.6],"SY":[38,35],"TC":[-71.6,21.8],"TD":[19,15],"TG":[1.2,8],"TH":[100,15],"TJ":[71,39],"TK":[-172,-9],"TM":[60,40],"TL":[125.9,-8.8],"TO":[-175,-20],"TT":[-61,11],"TN":[9,34],"TR":[35,39],"TV":[178,-8],"TW":[121,23.5],"TZ":[35,-6],"UG":[32,1],"UA":[32,49],"UM":[166.6,19.3],"UY":[-56,-33],"US":[-97,38],"UZ":[64,41],"VA":[12.5,41.9],"VC":[-61.2,13.3],"VE":[-66,8],"VG":[-64.6,18.4],"VI":[-64.9,18.4],"VN":[107.8,16.2],"VU":[167,-16],"WF":[-176.2,-13.3],"WS":[-172.3,-13.6],"YE":[48,15],"ZA":[24,-29],"ZM":[30,-15],"ZW":[30,-20]},"names":{"AW":"Aruba","AF":"Afghanistan","AO":"Angola","AI":"Anguilla","AX":"Åland Islands","AL":"Albania","AD":"Andorra","AE":"United Arab Emirates","AR":"Argentina","AM":"Armenia","AS":"American Samoa","AQ":"Antarctica","TF":"French Southern and Antarctic Lands","AG":"Antigua and Barbuda","AU":"Australia","AT":"Austria","AZ":"Azerbaijan","BI":"Burundi","BE":"Belgium","BJ":"Benin","BF":"Burkina Faso","BD":"Bangladesh","BG":"Bulgaria","BH":"Bahrain","BS":"Bahamas","BA":"Bosnia and Herzegovina","BL":"Saint Barthélemy","SH":"Saint Helena, Ascension and Tristan da Cunha","BY":"Belarus","BZ":"Belize","BM":"Bermuda","BO":"Bolivia","BQ":"Caribbean Netherlands","BR":"Brazil","BB":"Barbados","BN":"Brunei","BT":"Bhutan","BV":"Bouvet Island","BW":"Botswana","CF":"Central African Republic","CA":"Canada","CC":"Cocos (Keeling) Islands","CH":"Switzerland","CL":"Chile","CN":"China","CI":"Ivory Coast","CM":"Cameroon","CD":"DR Congo","CG":"Republic of the Congo","CK":"Cook Islands","CO":"Colombia","KM":"Comoros","CV":"Cape Verde","CR":"Costa Rica","CU":"Cuba","CW":"Curaçao","CX":"Christmas Island","KY":"Cayman Islands","CY":"Cyprus","CZ":"Czechia","DE":"Germany","DJ":"Djibouti","DM":"Dominica","DK":"Denmark","DO":"Dominican Republic","DZ":"Algeria","EC":"Ecuador","EG":"Egypt","ER":"Eritrea","EH":"Western Sahara","ES":"Spain","EE":"Estonia","ET":"Ethiopia","FI":"Finland","FJ":"Fiji","FK":"Falkland Islands","FR":"France","FO":"Faroe Islands","FM":"Micronesia","GA":"Gabon","GB":"United Kingdom","GE":"Georgia","GG":"Guernsey","GH":"Ghana","GI":"Gibraltar","GN":"Guinea","GP":"Guadeloupe","GM":"Gambia","GW":"Guinea-Bissau","GQ":"Equatorial Guinea","GR":"Greece","GD":"Grenada","GL":"Greenland","GT":"Guatemala","GF":"French Guiana","GU":"Guam","GY":"Guyana","HK":"Hong Kong","HM":"Heard Island and McDonald Islands","HN":"Honduras","HR":"Croatia","HT":"Haiti","HU":"Hungary","ID":"Indonesia","IM":"Isle of Man","IN":"India","IO":"British Indian Ocean Territory","IE":"Ireland","IR":"Iran","IQ":"Iraq","IS":"Iceland","IL":"Israel","IT":"Italy","JM":"Jamaica","JE":"Jersey","JO":"Jordan","JP":"Japan","KZ":"Kazakhstan","KE":"Kenya","KG":"Kyrgyzstan","KH":"Cambodia","KI":"Kiribati","KN":"Saint Kitts and Nevis","KR":"South Korea","XK":"Kosovo","KW":"Kuwait","LA":"Laos","LB":"Lebanon","LR":"Liberia","LY":"Libya","LC":"Saint Lucia","LI":"Liechtenstein","LK":"Sri Lanka","LS":"Lesotho","LT":"Lithuania","LU":"Luxembourg","LV":"Latvia","MO":"Macau","MF":"Saint Martin","MA":"Morocco","MC":"Monaco","MD":"Moldova","MG":"Madagascar","MV":"Maldives","MX":"Mexico","MH":"Marshall Islands","MK":"North Macedonia","ML":"Mali","MT":"Malta","MM":"Myanmar","ME":"Montenegro","MN":"Mongolia","MP":"Northern Mariana Islands","MZ":"Mozambique","MR":"Mauritania","MS":"Montserrat","MQ":"Martinique","MU":"Mauritius","MW":"Malawi","MY":"Malaysia","YT":"Mayotte","NA":"Namibia","NC":"New Caledonia","NE":"Niger","NF":"Norfolk Island","NG":"Nigeria","NI":"Nicaragua","NU":"Niue","NL":"Netherlands","NO":"Norway","NP":"Nepal","NR":"Nauru","NZ":"New Zealand","OM":"Oman","PK":"Pakistan","PA":"Panama","PN":"Pitcairn Islands","PE":"Peru","PH":"Philippines","PW":"Palau","PG":"Papua New Guinea","PL":"Poland","PR":"Puerto Rico","KP":"North Korea","PT":"Portugal","PY":"Paraguay","PS":"Palestine","PF":"French Polynesia","QA":"Qatar","RE":"Réunion","RO":"Romania","RU":"Russia","RW":"Rwanda","SA":"Saudi Arabia","SD":"Sudan","SN":"Senegal","SG":"Singapore","GS":"South Georgia","SJ":"Svalbard and Jan Mayen","SB":"Solomon Islands","SL":"Sierra Leone","SV":"El Salvador","SM":"San Marino","SO":"Somalia","PM":"Saint Pierre and Miquelon","RS":"Serbia","SS":"South Sudan","ST":"São Tomé and Príncipe","SR":"Suriname","SK":"Slovakia","SI":"Slovenia","SE":"Sweden","SZ":"Eswatini","SX":"Sint Maarten","SC":"Seychelles","SY":"Syria","TC":"Turks and Caicos Islands","TD":"Chad","TG":"Togo","TH":"Thailand","TJ":"Tajikistan","TK":"Tokelau","TM":"Turkmenistan","TL":"Timor-Leste","TO":"Tonga","TT":"Trinidad and Tobago","TN":"Tunisia","TR":"Türkiye","TV":"Tuvalu","TW":"Taiwan","TZ":"Tanzania","UG":"Uganda","UA":"Ukraine","UM":"United States Minor Outlying Islands","UY":"Uruguay","US":"United States","UZ":"Uzbekistan","VA":"Vatican City","VC":"Saint Vincent and the Grenadines","VE":"Venezuela","VG":"British Virgin Islands","VI":"United States Virgin Islands","VN":"Vietnam","VU":"Vanuatu","WF":"Wallis and Futuna","WS":"Samoa","YE":"Yemen","ZA":"South Africa","ZM":"Zambia","ZW":"Zimbabwe"}};
+
+/* ============ tiny helpers ============ */
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => n == null ? '—' : n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'k' : String(n);
+const idTail = url => String(url || '').split('/').pop();
+const flag = cc => cc && /^[A-Za-z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
+const PALETTE = ['#3A86FF','#FB5607','#068F6C','#C98A00','#E4569B','#7B2FBF'];
+const API = 'https://api.openalex.org';
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url.slice(0, 120));
+  return r.json();
+}
+/* Try a chain of URLs until one works (endpoint-variant fallbacks). */
+async function getJSONChain(urls) {
+  let lastErr;
+  for (const u of urls) { try { return await getJSON(u); } catch (e) { lastErr = e; } }
+  throw lastErr;
+}
+
+/* ============ quirky loading copy ============ */
+const QUIPS = ['bribing the librarian…','dusting off the archives…','untangling citation spaghetti…','asking the peer reviewers nicely…','counting semicolons in the bibliography…','waking up the co-authors…','herding h-indexes…'];
+let quipTimer = null;
+function showLoading(msg) {
+  const s = $('#status'); s.className = 'on';
+  s.innerHTML = '';
+  const card = el('div', 'loading-card');
+  card.appendChild(el('div', 'spinner'));
+  const t = el('div', '', esc(msg));
+  card.appendChild(t); s.appendChild(card);
+  clearInterval(quipTimer);
+  quipTimer = setInterval(() => { t.textContent = QUIPS[Math.floor(Math.random() * QUIPS.length)]; }, 1600);
+}
+function showError(msg) {
+  clearInterval(quipTimer);
+  const s = $('#status'); s.className = 'on';
+  s.innerHTML = '';
+  s.appendChild(el('div', 'err-card', '💥 ' + esc(msg) + ' — try another paper?'));
+}
+function clearStatus() { clearInterval(quipTimer); const s = $('#status'); s.className = ''; s.innerHTML = ''; }
+const miniLoad = msg => `<div class="mini-load"><div class="spinner"></div>${esc(msg)}</div>`;
+
+/* ============ tooltip ============ */
+const tip = $('#tip');
+function tipShow(html, x, y) {
+  tip.innerHTML = html; tip.style.display = 'block';
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(x + pad, innerWidth - w - 8) + 'px';
+  tip.style.top = (y - h - pad < 8 ? y + pad : y - h - pad) + 'px';
+}
+function tipHide() { tip.style.display = 'none'; }
+
+/* ============ search + autocomplete ============ */
+const qInput = $('#q'), sugBox = $('#suggest');
+let sugItems = [], sugHot = -1, acTimer = null, acSeq = 0;
+
+qInput.addEventListener('input', () => {
+  clearTimeout(acTimer);
+  const v = qInput.value.trim();
+  if (v.length < 3 || looksLikeDOI(v)) { closeSug(); return; }
+  acTimer = setTimeout(() => autocomplete(v), 220);
+});
+qInput.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!sugItems.length) return;
+    e.preventDefault();
+    sugHot = (sugHot + (e.key === 'ArrowDown' ? 1 : -1) + sugItems.length) % sugItems.length;
+    [...sugBox.children].forEach((c, i) => c.classList.toggle('hot', i === sugHot));
+  } else if (e.key === 'Enter') {
+    if (sugHot >= 0 && sugItems[sugHot]) pickSuggestion(sugItems[sugHot]);
+    else runSearch();
+  } else if (e.key === 'Escape') closeSug();
+});
+document.addEventListener('click', e => { if (!e.target.closest('.searchbox')) closeSug(); });
+
+function looksLikeDOI(v) {
+  return /^(https?:\/\/(dx\.)?doi\.org\/)?10\.\d{4,9}\/\S+$/i.test(v);
+}
+function closeSug() { sugBox.className = 'suggest'; sugBox.innerHTML = ''; sugItems = []; sugHot = -1; }
+
+async function autocomplete(v) {
+  const seq = ++acSeq;
+  try {
+    const j = await getJSON(`${API}/autocomplete/works?q=${encodeURIComponent(v)}`);
+    if (seq !== acSeq) return;
+    sugItems = (j.results || []).slice(0, 7);
+    sugHot = -1;
+    sugBox.innerHTML = '';
+    if (!sugItems.length) { closeSug(); return; }
+    for (const it of sugItems) {
+      const b = el('button', 'sug');
+      b.innerHTML = `<span class="t">${esc(it.display_name)}</span>
+        <div class="m">${esc(it.hint || '')}<span class="cite-pill">${fmt(it.cited_by_count)} cites</span></div>`;
+      b.addEventListener('click', () => pickSuggestion(it));
+      sugBox.appendChild(b);
+    }
+    sugBox.className = 'suggest open';
+  } catch (e) { /* autocomplete is best-effort */ }
+}
+function pickSuggestion(it) {
+  qInput.value = it.display_name;
+  closeSug();
+  loadPaper(idTail(it.id));
+}
+
+$('#go').addEventListener('click', runSearch);
+/* Pot luck: a genuinely random paper from OpenAlex's ~250M-work catalog, via its
+   sample API. Lightly filtered (has a DOI, 25+ citations) so the roll lands on a
+   paper with enough of a citation story to fill the dashboards. Falls back to a
+   short famous-papers list if the sample endpoint is unreachable. */
+const FAMOUS = ['W2741809807','W2963403868','W2100837269','W2144634347','W2194775991','W2108234281','W1861714852','W2119103177'];
+$('#lucky').addEventListener('click', async () => {
+  qInput.value = '';
+  closeSug();
+  showLoading('rolling the dice across 250 million papers…');
+  try {
+    const seed = Math.floor(Math.random() * 2147483647);
+    const j = await getJSON(`${API}/works?filter=has_doi:true,cited_by_count:>24&sample=1&seed=${seed}&per-page=1&select=id`);
+    if (j.results && j.results[0]) { loadPaper(idTail(j.results[0].id)); return; }
+    throw new Error('empty sample');
+  } catch (e) {
+    loadPaper(FAMOUS[Math.floor(Math.random() * FAMOUS.length)]);
+  }
+});
+
+async function runSearch() {
+  const v = qInput.value.trim();
+  if (!v) return;
+  closeSug();
+  if (looksLikeDOI(v)) {
+    const doi = v.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '');
+    loadPaper('https://doi.org/' + doi);
+    return;
+  }
+  showLoading('hunting down “' + v.slice(0, 60) + '”…');
+  try {
+    const j = await getJSON(`${API}/works?search=${encodeURIComponent(v)}&per-page=1`);
+    if (!j.results || !j.results.length) { showError('No paper found for that search'); return; }
+    loadPaper(idTail(j.results[0].id));
+  } catch (e) { showError('Search flopped (' + esc(e.message) + ')'); }
+}
+
+/* ============ main orchestration ============ */
+const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access';
+
+async function loadPaper(idOrDoi) {
+  showLoading('fetching the paper…');
+  $('#results').className = '';
+  try {
+    const w = await getJSON(`${API}/works/${encodeURIComponent(idOrDoi).replace(/%3A/g,':').replace(/%2F/g,'/')}?select=${WORK_SELECT}`);
+    clearStatus();
+    renderHero(w);
+    enrichSemanticScholar(w); // best-effort second opinion on citations
+    $('#results').className = 'on';
+    // fire the four panels independently — each has its own loading + error state
+    $('#netbox').innerHTML = miniLoad('spinning the web…');
+    $('#netlegend').innerHTML = '';
+    $('#journal').innerHTML = miniLoad('checking the leaderboard…');
+    $('#mapbox').innerHTML = miniLoad('spinning the globe…');
+    $('#cbars').innerHTML = '';
+    $('#acards').innerHTML = miniLoad('interviewing the fans…');
+    panelSafe(buildNetwork(w), '#netbox', 'The map got tangled');
+    panelSafe(buildJournal(w), '#journal', 'Leaderboard unavailable');
+    const citersP = fetchCiters(w);
+    panelSafe(buildCountries(w, citersP), '#mapbox', 'The globe jammed');
+    panelSafe(buildAuthors(w, citersP), '#acards', 'The crew went quiet');
+  } catch (e) {
+    showError('Could not fetch that paper (' + esc(e.message) + ')');
+  }
+}
+async function panelSafe(promise, sel, msg) {
+  try { await promise; }
+  catch (e) { console.warn(msg, e); $(sel).innerHTML = `<div class="empty">😵 ${esc(msg)}. (${esc(e.message)})</div>`; }
+}
+
+function workURL(w) { return w.doi || w.id || '#'; }
+
+/* Second-opinion citation count from Semantic Scholar (free, CORS-open, no key).
+   Its corpus is broader than OpenAlex's, so it usually lands closer to Google Scholar. */
+async function enrichSemanticScholar(w) {
+  const S2 = 'https://api.semanticscholar.org/graph/v1/paper';
+  const fields = 'fields=citationCount,influentialCitationCount';
+  try {
+    let j = null;
+    if (w.doi) {
+      const doi = w.doi.replace('https://doi.org/', '');
+      j = await getJSON(`${S2}/DOI:${encodeURIComponent(doi)}?${fields}`);
+    } else {
+      const m = await getJSON(`${S2}/search/match?query=${encodeURIComponent(w.display_name)}&${fields}`);
+      j = m.data && m.data[0];
+    }
+    if (j && j.citationCount != null) {
+      const b = $('#s2badge');
+      if (!b) return;
+      b.style.display = '';
+      b.title = `Semantic Scholar counts a broader corpus (incl. many preprints), so it usually sits closer to Google Scholar's number.` +
+        (j.influentialCitationCount != null ? ` ${fmt(j.influentialCitationCount)} of these are "influential" citations.` : '');
+      b.innerHTML = `📣 ${fmt(j.citationCount)} citations <small style="font-weight:700;opacity:.65">(Semantic Scholar)</small>`;
+    }
+  } catch (e) { /* badge simply stays hidden */ }
+}
+
+function renderHero(w) {
+  const auths = (w.authorships || []).map(a => a.author && a.author.display_name).filter(Boolean);
+  const authStr = auths.length > 8 ? auths.slice(0, 8).join(', ') + ' + ' + (auths.length - 8) + ' more' : auths.join(', ');
+  const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
+  const topic = w.primary_topic && w.primary_topic.display_name;
+  const oa = w.open_access && w.open_access.is_oa;
+  $('#hero').innerHTML = `
+    <div class="sticker">UNDER THE SCOPE</div>
+    <h2><a href="${esc(workURL(w))}" target="_blank" rel="noopener">${esc(w.display_name)}</a></h2>
+    <div class="authors">${esc(authStr || 'Author list unavailable')}</div>
+    <div class="badges">
+      <span class="badge y">📅 ${esc(w.publication_year ?? '—')}</span>
+      <span class="badge c" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows a higher number because it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations <small style="font-weight:700;opacity:.65">(OpenAlex)</small></span>
+      <span class="badge c" id="s2badge" style="display:none"></span>
+      <a class="badge gs" target="_blank" rel="noopener" href="https://scholar.google.com/scholar?q=${encodeURIComponent(w.doi ? w.doi.replace('https://doi.org/','') : '"' + w.display_name + '"')}" title="Open this paper on Google Scholar — Scholar has no API, so its count can't be shown here, but it's one click away.">🎓 Google Scholar ↗</a>
+      ${venue ? `<a class="badge v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
+      ${topic ? `<a class="badge t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
+      ${oa ? `<span class="badge oa">🔓 open access</span>` : ''}
+    </div>`;
+}
+
+/* ============ panel 1: similar-papers network ============ */
+let NET = null; // live network state (persists across spawns, reset per paper)
+const NET_SEL = 'id,display_name,publication_year,cited_by_count,primary_topic,topics,doi';
+const NET_CAP = 60;
+
+/* Closeness: 0-100 heuristic mix of OpenAlex's related-list position (45), topic
+   overlap with the main paper (30), same primary topic (15), same field (10). */
+function closenessScore(mainW, n) {
+  let s = 0;
+  if (n.relIdx != null) s += 45 * (1 - 0.5 * (n.relIdx / Math.max(1, n.relTotal - 1)));
+  const mt = new Set((mainW.topics || []).map(t => idTail(t.id)));
+  const nt = [...new Set((n.w.topics || []).map(t => idTail(t.id)))];
+  if (mt.size && nt.length) {
+    const shared = nt.filter(t => mt.has(t)).length;
+    s += 30 * (shared / Math.max(1, Math.min(mt.size, nt.length)));
+  }
+  const mp = mainW.primary_topic && idTail(mainW.primary_topic.id);
+  const np = n.w.primary_topic && idTail(n.w.primary_topic.id);
+  if (mp && mp === np) s += 15;
+  const mf = mainW.primary_topic && mainW.primary_topic.field && mainW.primary_topic.field.display_name;
+  const nf = n.w.primary_topic && n.w.primary_topic.field && n.w.primary_topic.field.display_name;
+  if (mf && mf === nf) s += 10;
+  return Math.round(Math.min(100, s));
+}
+
+const fieldOf = n => (n.w.primary_topic && n.w.primary_topic.field && n.w.primary_topic.field.display_name) || 'Unknown field';
+function netGroup(n) { return NET.shown.includes(fieldOf(n)) ? fieldOf(n) : '__other'; }
+function netColor(n) { const i = NET.shown.indexOf(fieldOf(n)); return i === -1 ? '#8a8578' : PALETTE[i]; }
+
+async function buildNetwork(w) {
+  if (NET && NET.raf) cancelAnimationFrame(NET.raf);
+  NET = null;
+  $('#netctl').style.display = 'none';
+  $('#nettable').style.display = 'none'; $('#nettable').innerHTML = '';
+  const tb = $('#tableBtn'); tb.classList.remove('open'); tb.innerHTML = '<span class="arr">▸</span> closeness table';
+  const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🪄 Spawn more papers';
+
+  const relIds = (w.related_works || []).map(idTail).filter(Boolean).slice(0, 12);
+  const jobs = [];
+  if (relIds.length) {
+    const f = relIds.join('|');
+    jobs.push(getJSONChain([
+      `${API}/works?filter=ids.openalex:${f}&per-page=25&select=${NET_SEL}`,
+      `${API}/works?filter=openalex_id:${f}&per-page=25&select=${NET_SEL}`,
+      `${API}/works?filter=openalex:${f}&per-page=25&select=${NET_SEL}`,
+    ]).then(j => j.results || []).catch(() => []));
+  } else jobs.push(Promise.resolve([]));
+  const topicId = w.primary_topic && idTail(w.primary_topic.id);
+  if (topicId) {
+    jobs.push(getJSON(`${API}/works?filter=primary_topic.id:${topicId}&sort=cited_by_count:desc&per-page=9&page=1&select=${NET_SEL}`)
+      .then(j => j.results || []).catch(() => []));
+  } else jobs.push(Promise.resolve([]));
+
+  const [related, topicTop] = await Promise.all(jobs);
+  const seen = new Set([idTail(w.id)]);
+  const nodes = [{ w, center: true, kind: 'this paper' }];
+  const relOrder = new Map(relIds.map((id, i) => [id, i]));
+  for (const r of related) {
+    const id = idTail(r.id);
+    if (seen.has(id)) continue; seen.add(id);
+    nodes.push({ w: r, kind: 'related work', relIdx: relOrder.get(id) ?? relIds.length - 1, relTotal: relIds.length });
+  }
+  for (const r of topicTop) {
+    const id = idTail(r.id);
+    if (seen.has(id)) continue; seen.add(id);
+    nodes.push({ w: r, kind: 'topic heavyweight' });
+  }
+  if (nodes.length < 2) { $('#netbox').innerHTML = '<div class="empty">🕳️ OpenAlex lists no related papers for this one. A lone wolf!</div>'; return; }
+
+  NET = { w, nodes, seen, topicId, topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null };
+  for (const n of nodes) if (!n.center) n.close = closenessScore(w, n);
+  refreshFields();
+  renderNetLegend();
+  drawNetwork();
+  $('#netctl').style.display = '';
+  window.NET = NET; // handy for debugging
+}
+
+function refreshFields() {
+  const fields = [];
+  for (const n of NET.nodes) { const f = fieldOf(n); if (!fields.includes(f)) fields.push(f); }
+  NET.shown = fields.slice(0, 5);
+  NET.hasOther = fields.length > 5;
+  if (NET.isolated && NET.isolated !== '__other' && !NET.shown.includes(NET.isolated)) NET.isolated = null;
+}
+
+function renderNetLegend() {
+  const lg = $('#netlegend'); lg.innerHTML = '';
+  const mk = (label, color, key) => {
+    const b = el('button', 'lg');
+    b.innerHTML = `<i style="background:${color}"></i>${esc(label)}`;
+    if (NET.isolated === key) b.classList.add('on');
+    else if (NET.isolated) b.classList.add('off');
+    b.title = NET.isolated === key ? 'Show every field again' : `Spotlight only ${label} papers`;
+    b.addEventListener('click', () => {
+      NET.isolated = NET.isolated === key ? null : key;
+      renderNetLegend();
+    });
+    lg.appendChild(b);
+  };
+  NET.shown.forEach((f, i) => mk(f, PALETTE[i], f));
+  if (NET.hasOther) mk('Other fields', '#8a8578', '__other');
+}
+
+async function spawnMore() {
+  const mb = $('#moreBtn');
+  if (!NET || !NET.topicId) { mb.disabled = true; mb.textContent = '🤷 No topic to mine'; return; }
+  mb.disabled = true; mb.textContent = '✨ conjuring…';
+  try {
+    NET.topicPage++;
+    const j = await getJSON(`${API}/works?filter=primary_topic.id:${NET.topicId}&sort=cited_by_count:desc&per-page=9&page=${NET.topicPage}&select=${NET_SEL}`);
+    let added = 0;
+    for (const r of (j.results || [])) {
+      if (NET.nodes.length >= NET_CAP) break;
+      const id = idTail(r.id);
+      if (NET.seen.has(id)) continue; NET.seen.add(id);
+      const n = { w: r, kind: 'topic heavyweight', fresh: 60 };
+      n.close = closenessScore(NET.w, n);
+      // enter from a random edge of the canvas
+      const side = Math.floor(Math.random() * 4);
+      n.x = side === 0 ? 10 : side === 1 ? NET.W - 10 : Math.random() * NET.W;
+      n.y = side === 2 ? 10 : side === 3 ? NET.H - 10 : Math.random() * NET.H;
+      n.vx = 0; n.vy = 0; n.r = 10;
+      NET.nodes.push(n); added++;
+    }
+    resizeNodes();
+    refreshFields();
+    renderNetLegend();
+    if (NET.tableOpen) renderNetTable();
+    if (NET.nodes.length >= NET_CAP) { mb.disabled = true; mb.textContent = '🎒 Map is full! (60 papers)'; }
+    else if (!added) { mb.disabled = true; mb.textContent = '🥲 The well ran dry'; }
+    else { mb.disabled = false; mb.textContent = '🪄 Spawn more papers'; }
+  } catch (e) {
+    mb.disabled = false; mb.textContent = '🪄 Spawn more papers (retry?)';
+  }
+}
+
+function resizeNodes() {
+  const maxC = Math.max(...NET.nodes.map(n => n.w.cited_by_count || 1));
+  for (const n of NET.nodes) n.r = n.center ? 30 : 10 + 16 * Math.sqrt((n.w.cited_by_count || 1) / maxC);
+}
+
+function renderNetTable() {
+  const box = $('#nettable');
+  const rows = NET.nodes.filter(n => !n.center).slice().sort((a, b) => (b.close || 0) - (a.close || 0));
+  box.innerHTML = '';
+  rows.forEach((n, i) => {
+    const a = el('a', 'ntrow');
+    a.href = workURL(n.w); a.target = '_blank'; a.rel = 'noopener';
+    a.title = 'Closeness = related-list position + topic overlap + same topic/field bonuses';
+    a.innerHTML = `<span class="rk">#${i + 1}</span>
+      <span><span class="ti">${esc(n.w.display_name)}</span>
+        <div class="meta"><span class="kchip${n.kind === 'related work' ? ' rel' : ''}">${n.kind === 'related work' ? 'related' : 'topic star'}</span>${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} cites · ${esc(fieldOf(n))}</div></span>
+      <span class="close-wrap"><span class="close-pct">${n.close ?? 0}%</span>
+        <span class="close-track"><span class="close-fill" style="width:${n.close ?? 0}%"></span></span></span>`;
+    box.appendChild(a);
+  });
+}
+
+$('#moreBtn').addEventListener('click', spawnMore);
+$('#tableBtn').addEventListener('click', () => {
+  if (!NET) return;
+  NET.tableOpen = !NET.tableOpen;
+  const tb = $('#tableBtn'), box = $('#nettable');
+  tb.classList.toggle('open', NET.tableOpen);
+  tb.innerHTML = `<span class="arr">▸</span> closeness table`;
+  if (NET.tableOpen) { renderNetTable(); box.style.display = ''; }
+  else box.style.display = 'none';
+});
+
+function drawNetwork() {
+  const box = $('#netbox'); box.innerHTML = '';
+  const W = Math.max(380, box.clientWidth || 560), H = 430;
+  NET.W = W; NET.H = H;
+  const cv = el('canvas'); cv.id = 'net'; box.appendChild(cv);
+  const dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+
+  const nodes = NET.nodes;
+  resizeNodes();
+  nodes.forEach((n, i) => {
+    if (n.x != null) return;
+    const a = (i / nodes.length) * Math.PI * 2;
+    n.x = W / 2 + (n.center ? 0 : (120 + 60 * Math.random()) * Math.cos(a));
+    n.y = H / 2 + (n.center ? 0 : (90 + 50 * Math.random()) * Math.sin(a));
+    n.vx = 0; n.vy = 0;
+  });
+  const center = nodes[0];
+  center.x = W / 2; center.y = H / 2;
+
+  const dimmed = n => NET.isolated && !n.center && netGroup(n) !== NET.isolated;
+
+  let dragging = null, hover = null;
+  function physics() {
+    for (let i = 1; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.fresh) n.fresh--;
+      if (n === dragging) continue;
+      let dx = center.x - n.x, dy = center.y - n.y;
+      const d = Math.hypot(dx, dy) || 1, want = 150 + n.r * 2;
+      const f = (d - want) * 0.004;
+      n.vx += (dx / d) * f * d * 0.02; n.vy += (dy / d) * f * d * 0.02;
+      for (let j = 1; j < nodes.length; j++) {
+        if (i === j) continue;
+        const m = nodes[j];
+        let rx = n.x - m.x, ry = n.y - m.y;
+        let rd = Math.hypot(rx, ry) || 1;
+        const min = n.r + m.r + 14;
+        if (rd < min * 1.7) { const p = (min * 1.7 - rd) * 0.012; n.vx += (rx / rd) * p * 8; n.vy += (ry / rd) * p * 8; }
+      }
+      n.vx *= 0.86; n.vy *= 0.86;
+      n.x += n.vx; n.y += n.vy;
+      n.x = Math.max(n.r + 6, Math.min(W - n.r - 6, n.x));
+      n.y = Math.max(n.r + 6, Math.min(H - n.r - 6, n.y));
+    }
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    for (let i = 1; i < nodes.length; i++) {
+      ctx.strokeStyle = dimmed(nodes[i]) ? 'rgba(20,20,20,.07)' : 'rgba(20,20,20,.35)';
+      ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(nodes[i].x, nodes[i].y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    for (const n of nodes) {
+      const dim = dimmed(n);
+      ctx.globalAlpha = dim ? 0.15 : 1;
+      ctx.beginPath(); ctx.arc(n.x + 3, n.y + 3, n.r, 0, 7); ctx.fillStyle = 'rgba(20,20,20,.9)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, 7);
+      ctx.fillStyle = n.center ? '#141414' : netColor(n); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#141414'; ctx.stroke();
+      if (n === hover && !dim) { ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(n.x, n.y, Math.max(2, n.r - 3), 0, 7); ctx.stroke(); }
+      if (n.fresh) { ctx.strokeStyle = '#D8F26E'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 4 + (n.fresh % 12) / 2, 0, 7); ctx.stroke(); }
+      if (n.center) { ctx.fillStyle = '#FFF8EC'; ctx.font = '900 15px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('★', n.x, n.y + 1); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function loop() { physics(); draw(); NET.raf = requestAnimationFrame(loop); }
+  loop();
+
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  const hit = p => nodes.find(n => !dimmed(n) && Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 4);
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e);
+    if (dragging) { dragging.x = p.x; dragging.y = p.y; dragging.vx = dragging.vy = 0; return; }
+    hover = hit(p);
+    cv.style.cursor = hover ? 'pointer' : 'grab';
+    if (hover) {
+      const n = hover;
+      tipShow(`<div class="tt">${esc(n.w.display_name)}</div>
+        <div class="tm">${esc(n.kind)} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''}</div>`, e.clientX, e.clientY);
+    } else tipHide();
+  });
+  cv.addEventListener('pointerdown', e => { const p = pos(e); dragging = hit(p); if (dragging) { cv.setPointerCapture(e.pointerId); dragging.dragStart = { x: p.x, y: p.y }; } });
+  cv.addEventListener('pointerup', e => {
+    if (dragging) {
+      const p = pos(e), s = dragging.dragStart;
+      if (s && Math.hypot(p.x - s.x, p.y - s.y) < 5) window.open(workURL(dragging.w), '_blank', 'noopener');
+    }
+    dragging = null;
+  });
+  cv.addEventListener('pointerleave', () => { hover = null; tipHide(); });
+}
+
+/* ============ panel 2: journal rank ============ */
+async function buildJournal(w) {
+  const src = w.primary_location && w.primary_location.source;
+  if (!src || !src.id) {
+    $('#journal').innerHTML = '<div class="empty">🕵️ This paper has no journal on record (preprint? report? mystery?). No leaderboard today.</div>';
+    return;
+  }
+  const sid = idTail(src.id);
+  const topic = w.primary_topic;
+  const srcSel = 'id,display_name,summary_stats,works_count,cited_by_count,type';
+  const detailP = getJSON(`${API}/sources/${sid}?select=${srcSel}`).catch(() => null);
+
+  let ranked = null, subjectName = null, total = null, subjFilter = null;
+  const tryRank = async (filter, name) => {
+    const j = await getJSON(`${API}/sources?filter=${filter}&sort=summary_stats.2yr_mean_citedness:desc&per-page=100&select=id,display_name,summary_stats`);
+    if (j.results && j.results.length) { ranked = j.results; total = j.meta && j.meta.count; subjectName = name; subjFilter = filter; }
+  };
+  if (topic && topic.id) {
+    try { await tryRank(`topics.id:${idTail(topic.id)}`, topic.display_name); } catch (e) {}
+  }
+  if (!ranked && w.concepts && w.concepts[0]) {
+    try { await tryRank(`x-concepts.id:${idTail(w.concepts[0].id)}`, w.concepts[0].display_name); } catch (e) {}
+  }
+  const detail = await detailP;
+  const stats = (detail && detail.summary_stats) || {};
+
+  /* Exact ranks by counting how many subject venues beat this one on each metric.
+     Two lenses on purpose: mean citedness (impact-factor cousin — punchy but gameable
+     by tiny venues) and h-index (volume+impact — big prestigious venues shine). */
+  const countRank = async (metric, val) => {
+    if (!subjFilter || val == null) return null;
+    const j = await getJSON(`${API}/sources?filter=${subjFilter},summary_stats.${metric}:>${val}&per-page=1&select=id`);
+    return j.meta && j.meta.count != null ? j.meta.count + 1 : null;
+  };
+  const [rankCited, rankH] = await Promise.all([
+    countRank('2yr_mean_citedness', stats['2yr_mean_citedness']).catch(() => null),
+    countRank('h_index', stats.h_index).catch(() => null),
+  ]);
+
+  const box = $('#journal');
+  let html = '';
+
+  if (ranked) {
+    const idx = ranked.findIndex(s => idTail(s.id) === sid);
+    const exact = idx >= 0 ? idx + 1 : rankCited;
+    const rankTxt = exact != null ? '#' + fmt(exact) : '100+';
+    html += `<div class="rank-hero">
+      <div class="rank-num">${rankTxt}</div>
+      <div class="rank-ctx"><a href="${esc(src.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">${esc(src.display_name)}</a><br>
+      <span class="in">of ${fmt(total)} venues publishing “${esc(subjectName)}” — by avg citations per recent paper</span>
+      ${rankH != null ? `<br><span class="in">…but <b style="color:var(--ink)">#${fmt(rankH)} by h-index</b>, the harder-to-game career metric 🏋️</span>` : ''}</div>
+    </div>`;
+    if (exact != null && exact > 100 && rankH != null && rankH < exact)
+      $('#jsub').textContent = 'Avg-citations rankings favor small review venues; mega-journals fare better on h-index. Both shown — draw your own conclusions.';
+  } else {
+    html += `<div class="rank-hero"><div class="rank-num">?</div>
+      <div class="rank-ctx"><a href="${esc(src.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">${esc(src.display_name)}</a><br><span class="in">subject leaderboard unavailable — solo stats below</span></div></div>`;
+  }
+  html += `<div class="statrow">
+    <div class="stat"><div class="v">${stats['2yr_mean_citedness'] != null ? stats['2yr_mean_citedness'].toFixed(2) : '—'}</div><div class="k">2-yr citedness</div></div>
+    <div class="stat"><div class="v">${fmt(stats.h_index)}</div><div class="k">h-index</div></div>
+    <div class="stat"><div class="v">${fmt(detail && detail.works_count)}</div><div class="k">works</div></div>
+  </div>`;
+
+  if (ranked) {
+    const idx = ranked.findIndex(s => idTail(s.id) === sid);
+    const show = [];
+    ranked.slice(0, 5).forEach((s, i) => show.push([i, s]));
+    if (idx >= 5) show.push([idx, ranked[idx]]);
+    const maxV = ranked[0].summary_stats && ranked[0].summary_stats['2yr_mean_citedness'] || 1;
+    html += '<div class="bars">';
+    for (const [i, s] of show) {
+      const v = (s.summary_stats && s.summary_stats['2yr_mean_citedness']) || 0;
+      const me = idTail(s.id) === sid;
+      html += `<div class="brow${me ? ' me' : ''}">
+        <span class="nm"><span class="pos">#${i + 1}</span><a href="${esc(s.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">${esc(s.display_name)}</a>${me ? ' ← this one' : ''}</span>
+        <span class="val">${v.toFixed(1)}</span>
+        <span class="track"><span class="fill" style="width:${Math.max(3, 100 * v / maxV)}%"></span></span>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  box.innerHTML = html;
+}
+
+/* ============ shared: citing works ============ */
+function fetchCiters(w) {
+  const wid = idTail(w.id);
+  const sel = 'id,display_name,publication_year,cited_by_count,authorships';
+  return getJSON(`${API}/works?filter=cites:${wid}&sort=cited_by_count:desc&per-page=100&select=${sel}`)
+    .then(j => ({ works: j.results || [], total: (j.meta && j.meta.count) || (j.results || []).length }));
+}
+
+/* ============ panel 3: countries map ============ */
+async function buildCountries(w, citersP) {
+  const wid = idTail(w.id);
+  let counts = null, basis = '';
+  // primary: server-side group_by over ALL citing works
+  try {
+    const j = await getJSON(`${API}/works?filter=cites:${wid}&group_by=authorships.countries`);
+    const groups = j.group_by || [];
+    if (groups.length) {
+      counts = {};
+      for (const g of groups) {
+        const cc = String(g.key || '').replace(/.*\//, '').toUpperCase();
+        if (/^[A-Z]{2}$/.test(cc)) counts[cc] = (counts[cc] || 0) + g.count;
+      }
+      basis = 'all citing papers (a paper counts once per author country)';
+    }
+  } catch (e) { /* fall through */ }
+  // fallback: aggregate client-side from sampled citers
+  if (!counts || !Object.keys(counts).length) {
+    const { works, total } = await citersP;
+    counts = {};
+    for (const cw of works) {
+      const per = new Set();
+      for (const a of (cw.authorships || [])) {
+        for (const c of (a.countries || [])) per.add(String(c).toUpperCase());
+        for (const inst of (a.institutions || [])) if (inst.country_code) per.add(String(inst.country_code).toUpperCase());
+      }
+      for (const cc of per) if (/^[A-Z]{2}$/.test(cc)) counts[cc] = (counts[cc] || 0) + 1;
+    }
+    basis = `the ${Math.min(100, total)} most-cited citing papers`;
+  }
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    $('#mapbox').innerHTML = '<div class="empty">🌵 No country data on the citing papers (or nobody has cited it yet — early days!).</div>';
+    $('#cbars').innerHTML = '';
+    return;
+  }
+  $('#mapsub').textContent = 'Author countries across ' + basis + '. Hover the bubbles — click one to see those papers!';
+  drawWorld(entries, wid);
+
+  // top-8 bars
+  const maxV = entries[0][1];
+  const cb = $('#cbars'); cb.innerHTML = '';
+  entries.slice(0, 8).forEach(([cc, v], i) => {
+    const row = el('a', 'brow');
+    row.href = `https://openalex.org/works?filter=cites:${wid},authorships.countries:${cc}`;
+    row.target = '_blank'; row.rel = 'noopener';
+    row.title = `See the citing papers from ${MAPDATA.names[cc] || cc} on OpenAlex`;
+    row.innerHTML = `<span class="nm"><span class="flag">${flag(cc)}</span>${esc(MAPDATA.names[cc] || cc)}</span>
+      <span class="val">${fmt(v)}</span>
+      <span class="track"><span class="fill" style="width:${Math.max(3, 100 * v / maxV)}%"></span></span>`;
+    cb.appendChild(row);
+  });
+  if (entries.length > 8) cb.appendChild(el('div', 'psub', '+ ' + (entries.length - 8) + ' more countries in the bubbles above'));
+}
+
+function drawWorld(entries, wid) {
+  const box = $('#mapbox'); box.innerHTML = '';
+  const G = MAPDATA.grid;
+  const W = Math.max(380, box.clientWidth || 560);
+  const cell = W / G.cols, H = cell * G.rows;
+  const cv = el('canvas'); cv.id = 'worldmap'; box.appendChild(cv);
+  const dpr = devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+
+  const project = (lon, lat) => [ (lon + 180) / 360 * W, (G.latTop - lat) / (G.latTop - G.latBot) * H ];
+
+  // land dots
+  ctx.fillStyle = '#9db8a3';
+  for (let r = 0; r < G.rows; r++) {
+    const hex = G.hexRows[r];
+    for (let c = 0; c < G.cols; c++) {
+      const bit = (parseInt(hex[c >> 2], 16) >> (3 - (c & 3))) & 1;
+      if (bit) { ctx.beginPath(); ctx.arc((c + .5) * cell, (r + .5) * cell, cell * .32, 0, 7); ctx.fill(); }
+    }
+  }
+  // bubbles
+  const maxV = entries[0][1];
+  const bubbles = [];
+  for (const [cc, v] of entries) {
+    const ll = MAPDATA.centroids[cc]; if (!ll) continue;
+    const [x, y] = project(ll[0], ll[1]);
+    bubbles.push({ cc, v, x, y, r: 5 + 22 * Math.sqrt(v / maxV) });
+  }
+  bubbles.sort((a, b) => b.r - a.r);
+  for (const b of bubbles) {
+    ctx.beginPath(); ctx.arc(b.x + 2, b.y + 2, b.r, 0, 7); ctx.fillStyle = 'rgba(20,20,20,.85)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7);
+    ctx.fillStyle = 'rgba(58,134,255,.88)'; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#141414'; ctx.stroke();
+  }
+  cv.addEventListener('pointermove', e => {
+    const r = cv.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    let best = null;
+    for (const b of bubbles) if (Math.hypot(b.x - p.x, b.y - p.y) <= b.r + 3) best = b; // smallest wins (drawn last)
+    if (best) tipShow(`<div class="tt">${flag(best.cc)} ${esc(MAPDATA.names[best.cc] || best.cc)}</div><div class="tm">${fmt(best.v)} citing papers</div>`, e.clientX, e.clientY);
+    else tipHide();
+    cv.style.cursor = best ? 'pointer' : 'default';
+  });
+  cv.addEventListener('pointerleave', tipHide);
+  cv.addEventListener('click', e => {
+    const r = cv.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top };
+    let best = null;
+    for (const b of bubbles) if (Math.hypot(b.x - p.x, b.y - p.y) <= b.r + 3) best = b;
+    if (best && wid) window.open(`https://openalex.org/works?filter=cites:${wid},authorships.countries:${best.cc}`, '_blank', 'noopener');
+  });
+}
+
+/* ============ panel 4: citing authors ============ */
+async function buildAuthors(w, citersP) {
+  const { works, total } = await citersP;
+  if (!works.length) {
+    $('#acards').innerHTML = '<div class="empty">🦗 Crickets — no citing papers yet. Someone has to be first!</div>';
+    return;
+  }
+  const agg = new Map();
+  for (const cw of works) {
+    for (const a of (cw.authorships || [])) {
+      if (!a.author || !a.author.id) continue;
+      const id = idTail(a.author.id);
+      let rec = agg.get(id);
+      if (!rec) { rec = { id, name: a.author.display_name, n: 0, inst: null, cc: null }; agg.set(id, rec); }
+      rec.n++;
+      if (!rec.inst && a.institutions && a.institutions[0]) { rec.inst = a.institutions[0].display_name; rec.instId = a.institutions[0].id; rec.cc = a.institutions[0].country_code; }
+      if (!rec.cc && a.countries && a.countries[0]) rec.cc = a.countries[0];
+    }
+  }
+  const top = [...agg.values()].sort((a, b) => b.n - a.n).slice(0, 6);
+  $('#asub').textContent = `Top citers among the ${Math.min(100, total)} most-cited of ${fmt(total)} citing papers.`;
+
+  // enrich with author stats (best-effort)
+  let enrich = {};
+  try {
+    const f = top.map(t => t.id).join('|');
+    const sel = 'id,display_name,summary_stats,last_known_institutions,works_count,cited_by_count';
+    const j = await getJSONChain([
+      `${API}/authors?filter=ids.openalex:${f}&per-page=25&select=${sel}`,
+      `${API}/authors?filter=openalex:${f}&per-page=25&select=${sel}`,
+    ]);
+    for (const a of (j.results || [])) enrich[idTail(a.id)] = a;
+  } catch (e) { /* cards still render without stats */ }
+
+  const box = $('#acards'); box.innerHTML = '';
+  top.forEach((t, i) => {
+    const e2 = enrich[t.id] || {};
+    const stats = e2.summary_stats || {};
+    const lki = e2.last_known_institutions && e2.last_known_institutions[0];
+    const inst = (lki && lki.display_name) || t.inst || 'Institution unknown';
+    const instId = (lki && lki.id) || t.instId;
+    const cc = (lki && lki.country_code) || t.cc;
+    const initials = (t.name || '?').split(/\s+/).map(s => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+    const card = el('div', 'acard');
+    card.innerHTML = `
+      <div class="avatar" style="background:${PALETTE[i % PALETTE.length]}">${esc(initials)}</div>
+      <div class="who">
+        <div class="nm"><a href="https://openalex.org/${esc(t.id)}" target="_blank" rel="noopener">${esc(t.name)}</a></div>
+        <div class="inst">${cc ? flag(cc) + ' ' : ''}${instId ? `<a href="${esc(instId)}" target="_blank" rel="noopener" title="Open this institution on OpenAlex">${esc(inst)}</a>` : esc(inst)}</div>
+        <div class="apills">
+          <span class="apill n">cites this ×${t.n}</span>
+          ${stats.h_index != null ? `<span class="apill h">h-index ${stats.h_index}</span>` : ''}
+          ${e2.works_count != null ? `<span class="apill">${fmt(e2.works_count)} papers</span>` : ''}
+          ${e2.cited_by_count != null ? `<span class="apill">${fmt(e2.cited_by_count)} cites</span>` : ''}
+        </div>
+      </div>`;
+    box.appendChild(card);
+  });
+}
+</script>
+</body>
+</html>

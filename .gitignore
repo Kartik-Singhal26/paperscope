@@ -1,0 +1,5 @@
+node_modules/
+mapdata.json
+package-lock.json
+*.png
+!docs_screenshot.png
