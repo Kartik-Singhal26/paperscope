@@ -566,7 +566,7 @@ function renderTrend(w) {
     const x0 = i * (bw + gap), y0 = H - axis - bh;
     const partial = c.year === now;
     bars += `<rect x="${x0}" y="${y0}" width="${bw}" height="${bh}" fill="${partial ? '#9ec5f4' : '#3A86FF'}" stroke="#141414" stroke-width="2.5"><title>${c.year}${partial ? ' (so far)' : ''}: ${fmt(c.cited_by_count)} citations</title></rect>`;
-    if (c.cited_by_count === max) labels += `<text x="${x0 + bw / 2}" y="${y0 - 7}" text-anchor="middle" font-size="12" font-weight="900" fill="#141414">${fmt(c.cited_by_count)}</text>`;
+    labels += `<text x="${x0 + bw / 2}" y="${y0 - 7}" text-anchor="middle" font-size="${bw < 26 ? 10 : 12}" font-weight="900" fill="${partial ? '#898781' : '#141414'}">${fmt(c.cited_by_count)}</text>`;
     if (i % lblStep === 0 || i === cby.length - 1) labels += `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="11.5" font-weight="800" fill="#898781">${c.year}</text>`;
   });
   const total = cby.reduce((a, c) => a + c.cited_by_count, 0);
@@ -864,6 +864,12 @@ $('#timeBtn').addEventListener('click', () => {
   $('#timeBtn').classList.toggle('on', NET.mode === 'time');
   $('#timeBtn').textContent = NET.mode === 'time' ? '🕸️ web view' : '🕰️ timeline view';
   if (NET.mode === 'time') computeTimeTargets();
+  else {
+    // returning to web view: re-anchor the hub and give the orbit a nudge
+    const c = NET.nodes[0];
+    c.x = NET.W / 2; c.y = NET.H / 2; c.vx = c.vy = 0;
+    for (const n of NET.nodes) if (!n.center) { n.vx = (Math.random() - 0.5) * 2; n.vy = (Math.random() - 0.5) * 2; }
+  }
 });
 
 $('#moreBtn').addEventListener('click', spawnMore);

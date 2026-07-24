@@ -169,6 +169,11 @@ function routeFor(url) {
   await page.screenshot({ path: 'shot_timeline.png' });
   await page.click('#timeBtn');
   checks.modeBack = await page.evaluate(() => window.NET.mode);
+  await page.waitForTimeout(600);
+  checks.centerRestored = await page.evaluate(() => {
+    const c = window.NET.nodes[0];
+    return Math.abs(c.x - window.NET.W / 2) < 2 && Math.abs(c.y - window.NET.H / 2) < 2;
+  });
 
   // network interactions: legend isolation, spawn, closeness table
   checks.nodesBefore = await page.evaluate(() => window.NET.nodes.length);
