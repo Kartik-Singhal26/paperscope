@@ -220,9 +220,13 @@
   #tip .tt{font-weight:900;}
   #tip .tm{opacity:.75; font-size:11.5px;}
 
-  .spark-row{display:flex; align-items:center; gap:14px; margin-top:16px; flex-wrap:wrap;}
-  .spark-box{border:3px solid var(--ink); background:#fff; padding:6px 10px 4px; box-shadow:3px 3px 0 var(--ink);}
-  .spark-cap{font-size:10.5px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:2px;}
+  .tabbar{display:flex; gap:10px; margin:-38px 0 14px 0; flex-wrap:wrap;}
+  .ptab{font-weight:900; font-size:14px; padding:6px 14px; border:3px solid var(--ink); cursor:pointer;
+    background:var(--paper); color:var(--ink); box-shadow:4px 4px 0 rgba(20,20,20,.25); transform:rotate(-1deg); letter-spacing:.3px;}
+  .ptab.on{background:var(--ink); color:var(--paper);}
+  .ptab:not(.on):hover{background:var(--sky);}
+  .trend-chart{border:3px solid var(--ink); background:#fff; box-shadow:3px 3px 0 var(--ink); padding:12px 10px 6px;}
+  .trend-foot{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:14px;}
   .verdict{border:3px solid var(--ink); padding:5px 12px; font-weight:900; font-size:13px; box-shadow:3px 3px 0 var(--ink); background:var(--lime); transform:rotate(-1deg);}
   .badge.share{cursor:pointer; background:#fff;}
   .badge.share:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
@@ -259,7 +263,7 @@
     <div class="grid">
       <section class="panel p-net">
         <div class="ptitle">🕸️ SIMILAR-PAPER MAP</div>
-        <div class="psub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = subfield. Drag nodes! Click to open.</div>
+        <div class="psub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = subfield. Drag nodes! Click one to scope that paper.</div>
         <div id="netbox"></div>
         <div class="legend" id="netlegend"></div>
         <div class="netctl" id="netctl" style="display:none">
@@ -271,9 +275,18 @@
       </section>
 
       <section class="panel p-journal">
-        <div class="ptitle">🏆 JOURNAL RANK</div>
-        <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
-        <div id="journal"></div>
+        <div class="tabbar">
+          <button class="ptab on" id="tabRank">🏆 JOURNAL RANK</button>
+          <button class="ptab" id="tabTrend">📈 CITATION TREND</button>
+        </div>
+        <div id="rankTab">
+          <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
+          <div id="journal"></div>
+        </div>
+        <div id="trendTab" style="display:none">
+          <div class="psub">How the citations rolled in, year by year. Hover the bars.</div>
+          <div id="trend"></div>
+        </div>
       </section>
 
       <section class="panel p-map">
@@ -515,7 +528,7 @@ function renderHero(w) {
   const oa = w.open_access && w.open_access.is_oa;
   $('#hero').innerHTML = `
     <div class="sticker">UNDER THE SCOPE</div>
-    <h2><a href="${esc(workURL(w))}" target="_blank" rel="noopener">${esc(w.display_name)}</a></h2>
+    <h2>${esc(w.display_name)}</h2>
     <div class="authors">${esc(authStr || 'Author list unavailable')}</div>
     <div class="badges">
       <span class="badge y">📅 ${esc(w.publication_year ?? '—')}</span>
@@ -525,30 +538,39 @@ function renderHero(w) {
       ${venue ? `<a class="badge v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
       ${topic ? `<a class="badge t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
       ${oa ? `<span class="badge oa">🔓 open access</span>` : ''}
+      <a class="badge share" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
       <button class="badge share" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
       <button class="badge share" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
-    </div>
-    <div class="spark-row" id="sparkrow"></div>`;
-  renderSparkline(w);
+    </div>`;
+  renderTrend(w);
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
 }
 
-/* ---- citation-velocity sparkline + verdict ---- */
-function renderSparkline(w) {
-  const row = $('#sparkrow');
-  const cby = (w.counts_by_year || []).slice().sort((a, b) => a.year - b.year).slice(-12);
-  if (cby.length < 2) { row.innerHTML = w.publication_year >= new Date().getFullYear() - 1 ? '<span class="verdict">🌱 fresh out of the oven — no trend yet</span>' : ''; return; }
+/* ---- citation trend tab: big yearly chart + verdict ---- */
+function renderTrend(w) {
+  const box = $('#trend');
+  const cby = (w.counts_by_year || []).slice().sort((a, b) => a.year - b.year).slice(-15);
+  if (cby.length < 2) {
+    box.innerHTML = '<div class="empty">🌱 Too young for a trend — check back in a year or two.</div>';
+    return;
+  }
   const now = new Date().getFullYear();
   const max = Math.max(...cby.map(c => c.cited_by_count), 1);
-  const bw = 13, gap = 4, h = 44;
-  let bars = '';
+  const W = Math.max(300, (box.clientWidth || 400) - 26), H = 230, axis = 26;
+  const gap = 6, bw = Math.max(8, Math.floor((W - gap * cby.length) / cby.length));
+  let bars = '', labels = '';
+  const lblStep = Math.ceil(cby.length / 6);
   cby.forEach((c, i) => {
-    const bh = Math.max(2, Math.round((c.cited_by_count / max) * (h - 6)));
+    const bh = Math.max(3, Math.round((c.cited_by_count / max) * (H - axis - 26)));
+    const x0 = i * (bw + gap), y0 = H - axis - bh;
     const partial = c.year === now;
-    bars += `<rect x="${i * (bw + gap)}" y="${h - bh}" width="${bw}" height="${bh}" fill="${partial ? '#9ec5f4' : '#3A86FF'}" stroke="#141414" stroke-width="2"><title>${c.year}${partial ? ' (so far)' : ''}: ${fmt(c.cited_by_count)} citations</title></rect>`;
+    bars += `<rect x="${x0}" y="${y0}" width="${bw}" height="${bh}" fill="${partial ? '#9ec5f4' : '#3A86FF'}" stroke="#141414" stroke-width="2.5"><title>${c.year}${partial ? ' (so far)' : ''}: ${fmt(c.cited_by_count)} citations</title></rect>`;
+    if (c.cited_by_count === max) labels += `<text x="${x0 + bw / 2}" y="${y0 - 7}" text-anchor="middle" font-size="12" font-weight="900" fill="#141414">${fmt(c.cited_by_count)}</text>`;
+    if (i % lblStep === 0 || i === cby.length - 1) labels += `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="11.5" font-weight="800" fill="#898781">${c.year}</text>`;
   });
-  const svgW = cby.length * (bw + gap) - gap;
+  const total = cby.reduce((a, c) => a + c.cited_by_count, 0);
+  const peak = cby.find(c => c.cited_by_count === max);
   // verdict: recent complete years vs the stretch before them
   const complete = cby.filter(c => c.year < now);
   let verdict = '📈 steady as she goes';
@@ -558,10 +580,25 @@ function renderSparkline(w) {
     if (recent > older * 1.25) verdict = '🚀 heating up';
     else if (recent < older * 0.6) verdict = (now - (w.publication_year || now)) > 10 ? '🏛️ elder statesman — done its damage' : '📉 cooling off';
   } else verdict = '🌱 young — trend still forming';
-  row.innerHTML = `<span class="spark-box"><svg width="${svgW}" height="${h}" role="img" aria-label="Citations per year">${bars}</svg>
-    <div class="spark-cap">citations / year (${cby[0].year}–${cby[cby.length - 1].year})</div></span>
-    <span class="verdict">${verdict}</span>`;
+  box.innerHTML = `
+    <div class="trend-chart"><svg width="${W}" height="${H}" role="img" aria-label="Citations per year, ${cby[0].year} to ${cby[cby.length - 1].year}">${bars}${labels}</svg></div>
+    <div class="statrow" style="margin-top:14px">
+      <div class="stat"><div class="v">${fmt(w.cited_by_count)}</div><div class="k">all-time</div></div>
+      <div class="stat"><div class="v">${peak ? peak.year : '—'}</div><div class="k">peak year</div></div>
+      <div class="stat"><div class="v">${fmt(Math.round(total / cby.length))}</div><div class="k">avg / yr shown</div></div>
+    </div>
+    <div class="trend-foot"><span class="verdict">${verdict}</span></div>`;
 }
+
+/* tab switching */
+function setTab(which) {
+  $('#tabRank').classList.toggle('on', which === 'rank');
+  $('#tabTrend').classList.toggle('on', which === 'trend');
+  $('#rankTab').style.display = which === 'rank' ? '' : 'none';
+  $('#trendTab').style.display = which === 'trend' ? '' : 'none';
+}
+$('#tabRank').addEventListener('click', () => setTab('rank'));
+$('#tabTrend').addEventListener('click', () => setTab('trend'));
 
 /* ---- sharing: permalink, toast, passport card ---- */
 let toastT = null;
@@ -803,8 +840,9 @@ function renderNetTable() {
   box.innerHTML = '';
   rows.forEach((n, i) => {
     const a = el('a', 'ntrow');
-    a.href = workURL(n.w); a.target = '_blank'; a.rel = 'noopener';
-    a.title = 'Closeness = related-list position + topic overlap + same topic/field bonuses';
+    a.href = '#';
+    a.title = 'Open this paper in PaperScope · closeness = related-list position + topic overlap + same topic/field bonuses';
+    a.addEventListener('click', ev => { ev.preventDefault(); scrollTo({ top: 0, behavior: 'smooth' }); loadPaper(idTail(n.w.id)); });
     a.innerHTML = `<span class="rk">#${i + 1}</span>
       <span><span class="ti">${esc(n.w.display_name)}</span>
         <div class="meta"><span class="kchip${n.kind === 'related work' ? ' rel' : ''}">${n.kind === 'related work' ? 'related' : 'topic star'}</span>${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} cites · ${esc(fieldOf(n))}</div></span>
@@ -974,7 +1012,7 @@ function drawNetwork() {
   cv.addEventListener('pointerup', e => {
     if (dragging) {
       const p = pos(e), s = dragging.dragStart;
-      if (s && Math.hypot(p.x - s.x, p.y - s.y) < 5) window.open(workURL(dragging.w), '_blank', 'noopener');
+      if (s && Math.hypot(p.x - s.x, p.y - s.y) < 5 && !dragging.center) { scrollTo({ top: 0, behavior: 'smooth' }); loadPaper(idTail(dragging.w.id)); }
     }
     dragging = null;
   });

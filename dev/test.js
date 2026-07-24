@@ -78,6 +78,8 @@ function routeFor(url) {
   }
   if (u.includes('/autocomplete/works')) return autoc;
   if (u.match(/\/works\/W2741809807/)) return MAIN;
+  const wd = u.match(/\/works\/(W90\d)\?/);
+  if (wd) { const r = relatedBatch.results.find(x => x.id.endsWith(wd[1])); return { ...r, authorships: [], topics: [], concepts: [], related_works: [], counts_by_year: [{ year: 2020, cited_by_count: 30 }, { year: 2021, cited_by_count: 60 }, { year: 2022, cited_by_count: 90 }, { year: 2023, cited_by_count: 100 }, { year: 2024, cited_by_count: 70 }] }; }
   if (u.includes('filter=ids.openalex:W90') || u.includes('filter=openalex_id:W90')) return relatedBatch;
   if (u.includes('filter=primary_topic.id:')) return u.includes('page=2') ? topicTop2 : topicTop;
   if (u.match(/\/sources\/S1983995261/)) return srcDetail;
@@ -149,9 +151,15 @@ function routeFor(url) {
     await page.waitForTimeout(300);
     checks.tooltipVisible = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
   }
-  // sparkline, permalink, edges, timeline
-  checks.spark = await page.$eval('#sparkrow', el => el.textContent.trim().slice(0, 80));
-  checks.sparkBars = await page.$$eval('#sparkrow rect', els => els.length);
+  // trend tab, permalink, edges, timeline
+  await page.click('#tabTrend');
+  checks.trendVisible = await page.$eval('#trendTab', el => el.style.display !== 'none');
+  checks.trendBars = await page.$$eval('#trend rect', els => els.length);
+  checks.trendText = await page.$eval('#trend', el => el.textContent.replace(/\s+/g, ' ').slice(0, 100));
+  await page.screenshot({ path: 'shot_trend.png' });
+  await page.click('#tabRank');
+  checks.rankBack = await page.$eval('#rankTab', el => el.style.display !== 'none');
+  checks.originalLink = await page.getAttribute('.hero a.badge.share[target=_blank]', 'href');
   checks.permalink = await page.evaluate(() => location.search);
   checks.edges = await page.evaluate(() => window.NET.edges.length);
   checks.realCiteHubs = await page.evaluate(() => window.NET.nodes.filter(n => n.realCite).length);
@@ -176,6 +184,10 @@ function routeFor(url) {
   await page.waitForTimeout(200);
   checks.tableRows = await page.$$eval('#nettable .ntrow', els => els.length);
   checks.tableFirst = await page.textContent('#nettable .ntrow');
+  await page.click('#nettable .ntrow');
+  await page.waitForTimeout(1200);
+  checks.inAppNav = (await page.textContent('#hero')).includes('Related paper number');
+  checks.inAppPermalink = await page.evaluate(() => location.search);
   await page.screenshot({ path: 'shot_net.png', fullPage: false });
 
   // pot-luck roll
