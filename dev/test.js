@@ -202,7 +202,7 @@ function routeFor(url) {
   }
   // fwci + percentile badges, bibtex
   const heroTxt = await page.textContent('#hero');
-  checks.fwciBadge = heroTxt.includes('208.6× field avg');
+  checks.fwciBadge = !heroTxt.includes('208.6');  // moved out of hero
   checks.percBadge = heroTxt.includes('top 1%');
   await page.click('#bibBtn');
   await page.waitForTimeout(300);
@@ -217,6 +217,7 @@ function routeFor(url) {
   checks.trendVisible = await page.$eval('#trendTab', el => el.style.display !== 'none');
   checks.trendBars = await page.$$eval('#trend rect', els => els.length);
   checks.trendText = await page.$eval('#trend', el => el.textContent.replace(/\s+/g, ' ').slice(0, 100));
+  checks.fwciTile = (await page.textContent('#trend')).includes('208.6');
   await page.screenshot({ path: 'shot_trend.png' });
   await page.click('#tabRank');
   checks.rankBack = await page.$eval('#rankTab', el => el.style.display !== 'none');
@@ -275,11 +276,12 @@ function routeFor(url) {
   checks.aCountries = (await page.textContent('#cbars')).slice(0, 60);
   await page.click('#tabCoauth');
   const coTxt = await page.textContent('#coauth');
-  checks.aCoauth = coTxt.includes('Vineet Kumar') && coTxt.includes('18 together') && !coTxt.match(/#\d+\s*Kartik/);
-  checks.aJourneyPaths = await page.$$eval('#journeySvg path', els => els.length);
-  checks.aJourneyLegend = (await page.textContent('#journeyPanel .legend')).slice(0, 90);
+  checks.aCoauth = coTxt.includes('Vineet Kumar') && coTxt.includes('18×') && !coTxt.match(/#\d+\s*Kartik/);
+  checks.aJourneyCells = await page.$$eval('#journey .jcell', els => els.length);
+  checks.aJourneyRows = (await page.textContent('#journey')).includes('Control and Systems Engineering');
   const jp = await page.$('#journeyPanel');
   await jp.screenshot({ path: 'shot_journey.png' });
+  const co = await page.$('#coauthTab');
   await page.click('#tabRank');
   checks.aMoreBtn = await page.textContent('#moreBtn');
   await page.click('#moreBtn');
