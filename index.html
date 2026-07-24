@@ -978,15 +978,17 @@ async function buildPortfolio(a, worksP) {
 async function buildCoauthors(a) {
   const selfId = idTail(a.id);
   const j = await getJSON(`${API}/works?filter=authorships.author.id:${selfId}&group_by=authorships.author.id`);
-  const groups = (j.group_by || [])
+  const raw = (j.group_by || [])
     .map(g => ({ id: idTail(g.key || ''), name: g.key_display_name, n: g.count }))
-    .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id))
-    .slice(0, 8);
+    .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id));
+  const groups = raw.sort((x, y) => y.n - x.n); // every collaborator, ranked
   const box = $('#coauth');
   if (!groups.length) { box.innerHTML = '<div class="empty">🐺 A lone wolf — no co-authors on record.</div>'; return; }
+  document.querySelector('#coauthTab .psub').textContent =
+    `All ${groups.length}${(j.group_by || []).length >= 200 ? '+' : ''} people they've published with, ranked by shared papers. Click a name to scope them.`;
   let enrich = {};
   try {
-    const f = groups.map(g => g.id).join('|');
+    const f = groups.slice(0, 50).map(g => g.id).join('|');
     const sel = 'id,display_name,summary_stats,last_known_institutions';
     const jj = await getJSONChain([
       `${API}/authors?filter=ids.openalex:${f}&per-page=25&select=${sel}`,
@@ -997,6 +999,7 @@ async function buildCoauthors(a) {
   const maxV = groups[0].n;
   box.innerHTML = '';
   const bars = el('div', 'bars');
+  bars.style.maxHeight = '430px'; bars.style.overflow = 'auto'; bars.style.paddingRight = '6px';
   groups.forEach((g, i) => {
     const e2 = enrich[g.id] || {};
     const lki = e2.last_known_institutions && e2.last_known_institutions[0];
