@@ -74,7 +74,7 @@ const AUTHOR = {
   counts_by_year: Array.from({ length: 8 }, (_, i) => ({ year: 2019 + i, cited_by_count: [20, 60, 120, 200, 260, 240, 220, 90][i] })),
   last_known_institutions: [{ id: 'https://openalex.org/I999', display_name: 'IIT Bombay', country_code: 'IN' }],
   affiliations: [{ institution: { display_name: 'IIT Bombay' }, years: [2015, 2016, 2020] }],
-  topics: [{ id: 'https://openalex.org/T111', display_name: 'Robot Control' }],
+  topics: [{ id: 'https://openalex.org/T111', display_name: 'Robot Control', count: 15 }, { id: 'https://openalex.org/T112', display_name: 'Nonlinear Systems', count: 9 }],
 };
 const authorWorks = { meta: { count: 42 }, results: Array.from({ length: 20 }, (_, i) => ({
   ...work(`W60${i}`, `Their paper number ${i}`, 2015 + (i % 9), 300 - i * 12, ['Engineering', 'Computer Science'][i % 2]),
@@ -103,7 +103,7 @@ function routeFor(url) {
   }
   if (u.includes('/autocomplete/works')) return autoc;
   if (u.includes('/autocomplete/authors')) return { results: [{ id: AUTHOR.id, display_name: AUTHOR.display_name, hint: 'IIT Bombay', cited_by_count: 1234 }] };
-  if (u.match(/\/authors\/A5023888391/) || u.match(/\/authors\/https:\/\/orcid\.org/)) return AUTHOR;
+  if (u.match(/\/authors\/A\d+\?/) || u.match(/\/authors\/https:\/\/orcid\.org/)) return AUTHOR;
   if (u.includes('authorships.author.id:A5023888391') && u.includes('group_by=primary_location.source.id')) return venueGroups;
   if (u.includes('authorships.author.id:A5023888391')) return authorWorks;
   if (u.includes('filter=cites:W600|') && u.includes('group_by=authorships.countries')) return { group_by: [
@@ -245,6 +245,15 @@ function routeFor(url) {
   checks.aNodes = await page.evaluate(() => window.NET.nodes.length);
   checks.aEdges = await page.evaluate(() => window.NET.edges.length);
   checks.aCountries = (await page.textContent('#cbars')).slice(0, 60);
+  checks.aMoreBtn = await page.textContent('#moreBtn');
+  await page.click('#moreBtn');
+  checks.aAreas = (await page.textContent('#areasbox')).includes('Robot Control');
+  checks.aTableLabel = (await page.click('#tableBtn'), await page.textContent('#tableBtn'));
+  await page.click('#tableBtn');
+  await page.click('#timeBtn');
+  await page.waitForTimeout(400);
+  checks.aStarHidden = await page.evaluate(() => window.NET.nodes[0].tx === -200);
+  await page.click('#timeBtn');
   await page.screenshot({ path: 'shot_author.png', fullPage: true });
 
   // ORCID direct entry
@@ -261,6 +270,12 @@ function routeFor(url) {
   await page.waitForSelector('#results.on', { timeout: 8000 });
   await page.waitForTimeout(800);
   checks.luckyHero = (await page.textContent('#hero')).includes('Attention Is All You Need');
+  // clickable author names in paper hero
+  await page.click('#hero a.au');
+  await page.waitForTimeout(1500);
+  checks.heroAuthorNav = (await page.textContent('#hero')).includes('Kartik Singhal');
+  checks.heroAuthorPermalink = await page.evaluate(() => location.search);
+
   console.log(JSON.stringify(checks, null, 1));
   console.log('CONSOLE ISSUES:', errors.length ? errors.slice(0, 10) : 'none');
   await browser.close();
