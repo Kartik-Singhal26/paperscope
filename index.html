@@ -864,6 +864,12 @@ $('#timeBtn').addEventListener('click', () => {
   $('#timeBtn').classList.toggle('on', NET.mode === 'time');
   $('#timeBtn').textContent = NET.mode === 'time' ? '🕸️ web view' : '🕰️ timeline view';
   if (NET.mode === 'time') computeTimeTargets();
+  else {
+    // returning to web view: re-anchor the hub and give the orbit a nudge
+    const c = NET.nodes[0];
+    c.x = NET.W / 2; c.y = NET.H / 2; c.vx = c.vy = 0;
+    for (const n of NET.nodes) if (!n.center) { n.vx = (Math.random() - 0.5) * 2; n.vy = (Math.random() - 0.5) * 2; }
+  }
 });
 
 $('#moreBtn').addEventListener('click', spawnMore);
