@@ -68,6 +68,31 @@ const autoc = { results: [
   { id: 'https://openalex.org/W123', display_name: 'Attention in psychology', hint: 'Someone Else, 1990', cited_by_count: 500 },
 ] };
 
+const AUTHOR = {
+  id: 'https://openalex.org/A5023888391', display_name: 'Kartik Singhal', orcid: 'https://orcid.org/0000-0002-1825-0097',
+  works_count: 42, cited_by_count: 1234, summary_stats: { h_index: 18, i10_index: 25 },
+  counts_by_year: Array.from({ length: 8 }, (_, i) => ({ year: 2019 + i, cited_by_count: [20, 60, 120, 200, 260, 240, 220, 90][i] })),
+  last_known_institutions: [{ id: 'https://openalex.org/I999', display_name: 'IIT Bombay', country_code: 'IN' }],
+  affiliations: [{ institution: { display_name: 'IIT Bombay' }, years: [2015, 2016, 2020] }],
+  topics: [{ id: 'https://openalex.org/T111', display_name: 'Robot Control' }],
+};
+const authorWorks = { meta: { count: 42 }, results: Array.from({ length: 20 }, (_, i) => ({
+  ...work(`W60${i}`, `Their paper number ${i}`, 2015 + (i % 9), 300 - i * 12, ['Engineering', 'Computer Science'][i % 2]),
+  referenced_works: i > 0 && i % 4 === 0 ? [`https://openalex.org/W60${i - 1}`] : [],
+})) };
+const venueGroups = { group_by: [
+  { key: 'https://openalex.org/S1', key_display_name: 'Journal of the Franklin Institute', count: 9 },
+  { key: 'https://openalex.org/S2', key_display_name: 'IEEE TAC', count: 6 },
+  { key: 'unknown', key_display_name: 'unknown', count: 5 },
+  { key: 'https://openalex.org/S3', key_display_name: 'Automatica', count: 3 },
+] };
+const authorCiters = { meta: { count: 900 }, results: Array.from({ length: 60 }, (_, i) => ({
+  id: `https://openalex.org/W5${i}`, display_name: `Fan paper ${i}`, publication_year: 2021, cited_by_count: 200 - i,
+  authorships: i % 5 === 0
+    ? [{ author: { id: 'https://openalex.org/A5023888391', display_name: 'Kartik Singhal' }, institutions: [], countries: ['IN'] }]
+    : [{ author: { id: `https://openalex.org/A7${i % 4}`, display_name: ['Ada Fan', 'Bo Cite', 'Cy Ref', 'Di Quote'][i % 4] }, institutions: [{ id: `https://openalex.org/I7${i % 4}`, display_name: 'Fan University', country_code: ['US', 'CN', 'DE', 'IN'][i % 4] }], countries: [['US', 'CN', 'DE', 'IN'][i % 4]] }],
+})) };
+
 function routeFor(url) {
   const u = decodeURIComponent(url);
   if (process.env.FALLBACK) {
@@ -77,6 +102,14 @@ function routeFor(url) {
     if (u.includes('/authors?filter=ids.openalex:')) return null;
   }
   if (u.includes('/autocomplete/works')) return autoc;
+  if (u.includes('/autocomplete/authors')) return { results: [{ id: AUTHOR.id, display_name: AUTHOR.display_name, hint: 'IIT Bombay', cited_by_count: 1234 }] };
+  if (u.match(/\/authors\/A5023888391/) || u.match(/\/authors\/https:\/\/orcid\.org/)) return AUTHOR;
+  if (u.includes('authorships.author.id:A5023888391') && u.includes('group_by=primary_location.source.id')) return venueGroups;
+  if (u.includes('authorships.author.id:A5023888391')) return authorWorks;
+  if (u.includes('filter=cites:W600|') && u.includes('group_by=authorships.countries')) return { group_by: [
+    { key: 'US', count: 300 }, { key: 'CN', count: 200 }, { key: 'IN', count: 150 }, { key: 'DE', count: 80 }] };
+  if (u.includes('filter=cites:W600|')) return authorCiters;
+  if (u.includes('/authors?filter=ids.openalex:A7')) return { results: [] };
   if (u.match(/\/works\/W2741809807/)) return MAIN;
   const wd = u.match(/\/works\/(W90\d)\?/);
   if (wd) { const r = relatedBatch.results.find(x => x.id.endsWith(wd[1])); return { ...r, authorships: [], topics: [], concepts: [], related_works: [], counts_by_year: [{ year: 2020, cited_by_count: 30 }, { year: 2021, cited_by_count: 60 }, { year: 2022, cited_by_count: 90 }, { year: 2023, cited_by_count: 100 }, { year: 2024, cited_by_count: 70 }] }; }
@@ -194,6 +227,34 @@ function routeFor(url) {
   checks.inAppNav = (await page.textContent('#hero')).includes('Related paper number');
   checks.inAppPermalink = await page.evaluate(() => location.search);
   await page.screenshot({ path: 'shot_net.png', fullPage: false });
+
+  // ===== author mode flow =====
+  await page.click('#modeAuthor');
+  await page.fill('#q', 'kartik singhal');
+  await page.waitForSelector('.suggest.open', { timeout: 5000 });
+  await page.click('.sug');
+  await page.waitForSelector('#results.on', { timeout: 8000 });
+  await page.waitForTimeout(2000);
+  const heroA = await page.textContent('#hero');
+  checks.aHero = heroA.includes('Kartik Singhal') && heroA.includes('ORCID') && heroA.includes('h-index 18');
+  checks.aPermalink = await page.evaluate(() => location.search);
+  checks.aNetTitle = await page.textContent('#netTitle');
+  checks.aVenues = (await page.textContent('#journal')).includes('Franklin Institute');
+  checks.aFans = await page.textContent('#asub');
+  checks.aFanExcludesSelf = !(await page.textContent('#acards')).includes('Kartik');
+  checks.aNodes = await page.evaluate(() => window.NET.nodes.length);
+  checks.aEdges = await page.evaluate(() => window.NET.edges.length);
+  checks.aCountries = (await page.textContent('#cbars')).slice(0, 60);
+  await page.screenshot({ path: 'shot_author.png', fullPage: true });
+
+  // ORCID direct entry
+  await page.fill('#q', '0000-0002-1825-0097');
+  await page.click('#go');
+  await page.waitForTimeout(1200);
+  checks.orcidNav = (await page.textContent('#hero')).includes('Kartik Singhal');
+
+  // back to paper mode via in-app switch for pot luck test
+  await page.click('#modePaper');
 
   // pot-luck roll
   await page.click('#lucky');
