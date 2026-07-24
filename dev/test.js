@@ -18,6 +18,8 @@ const MAIN = {
   referenced_works: ['https://openalex.org/W900', 'https://openalex.org/W901'],
   counts_by_year: Array.from({ length: 9 }, (_, i) => ({ year: 2018 + i, cited_by_count: [500, 1500, 4000, 9000, 16000, 26000, 30000, 34000, 12000][i] })),
   open_access: { is_oa: true },
+  fwci: 208.6, citation_normalized_percentile: { value: 0.9999, is_in_top_1_percent: true, is_in_top_10_percent: true },
+  biblio: { volume: '30', first_page: '5998', last_page: '6008' },
 };
 // related papers cite each other: W901->W900, W902->W900, W903->W901
 for (const [a, b] of [[1, 0], [2, 0], [3, 1]]) {
@@ -105,6 +107,19 @@ function routeFor(url) {
   if (u.includes('/autocomplete/authors')) return { results: [{ id: AUTHOR.id, display_name: AUTHOR.display_name, hint: 'IIT Bombay', cited_by_count: 1234 }] };
   if (u.match(/\/authors\/A\d+\?/) || u.match(/\/authors\/https:\/\/orcid\.org/)) return AUTHOR;
   if (u.includes('authorships.author.id:A5023888391') && u.includes('group_by=primary_location.source.id')) return venueGroups;
+  if (u.includes('authorships.author.id:A5023888391') && u.includes('group_by=authorships.author.id')) return { group_by: [
+    { key: 'https://openalex.org/A5023888391', key_display_name: 'Kartik Singhal', count: 42 },
+    { key: 'https://openalex.org/A801', key_display_name: 'Vineet Kumar', count: 18 },
+    { key: 'https://openalex.org/A802', key_display_name: 'K.P.S. Rana', count: 14 },
+  ] };
+  if (u.includes('authorships.author.id:A5023888391') && u.includes('select=publication_year,primary_topic')) return { meta: { count: 42 }, results: Array.from({ length: 40 }, (_, i) => ({
+    publication_year: 2016 + (i % 10),
+    primary_topic: { subfield: { display_name: ['Control and Systems Engineering', 'Artificial Intelligence', 'Signal Processing'][i % 3] }, field: { display_name: 'Engineering' } },
+  })) };
+  if (u.includes('/authors?filter=ids.openalex:A80')) return { results: [
+    { id: 'https://openalex.org/A801', display_name: 'Vineet Kumar', summary_stats: { h_index: 30 }, last_known_institutions: [{ id: 'https://openalex.org/I9', display_name: 'NSUT', country_code: 'IN' }] },
+  ] };
+  if (u.includes('biblio') && u.includes('filter=ids.openalex:W')) return { results: relatedBatch.results.slice(0, 5).map(r => ({ ...r, authorships: [{ author: { id: 'https://openalex.org/A1', display_name: 'Rel Author' } }], biblio: { volume: '1' } })) };
   if (u.includes('authorships.author.id:A5023888391')) return authorWorks;
   if (u.includes('filter=cites:W600|') && u.includes('group_by=authorships.countries')) return { group_by: [
     { key: 'US', count: 300 }, { key: 'CN', count: 200 }, { key: 'IN', count: 150 }, { key: 'DE', count: 80 }] };
@@ -129,7 +144,8 @@ function routeFor(url) {
 
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const ctxB = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const page = await ctxB.newPage();
   const errors = [];
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
@@ -184,6 +200,18 @@ function routeFor(url) {
     await page.waitForTimeout(300);
     checks.tooltipVisible = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
   }
+  // fwci + percentile badges, bibtex
+  const heroTxt = await page.textContent('#hero');
+  checks.fwciBadge = heroTxt.includes('FWCI 208.6');
+  checks.percBadge = heroTxt.includes('top 1%');
+  await page.click('#bibBtn');
+  await page.waitForTimeout(300);
+  checks.bibHero = (await page.evaluate(() => navigator.clipboard.readText())).slice(0, 60);
+  await page.click('#bibAllBtn');
+  await page.waitForTimeout(1200);
+  const allBib = await page.evaluate(() => navigator.clipboard.readText());
+  checks.bibAllCount = (allBib.match(/@/g) || []).length;
+
   // trend tab, permalink, edges, timeline
   await page.click('#tabTrend');
   checks.trendVisible = await page.$eval('#trendTab', el => el.style.display !== 'none');
@@ -245,6 +273,14 @@ function routeFor(url) {
   checks.aNodes = await page.evaluate(() => window.NET.nodes.length);
   checks.aEdges = await page.evaluate(() => window.NET.edges.length);
   checks.aCountries = (await page.textContent('#cbars')).slice(0, 60);
+  await page.click('#tabCoauth');
+  const coTxt = await page.textContent('#coauth');
+  checks.aCoauth = coTxt.includes('Vineet Kumar') && coTxt.includes('18 together') && !coTxt.match(/#\d+\s*Kartik/);
+  checks.aJourneyPaths = await page.$$eval('#journeySvg path', els => els.length);
+  checks.aJourneyLegend = (await page.textContent('#journeyPanel .legend')).slice(0, 90);
+  const jp = await page.$('#journeyPanel');
+  await jp.screenshot({ path: 'shot_journey.png' });
+  await page.click('#tabRank');
   checks.aMoreBtn = await page.textContent('#moreBtn');
   await page.click('#moreBtn');
   checks.aAreas = (await page.textContent('#areasbox')).includes('Robot Control');

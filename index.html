@@ -133,8 +133,8 @@
   }
   .psub{font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:12px;}
   .p-net{grid-column:span 7;} .p-journal{grid-column:span 5;}
-  .p-map{grid-column:span 7;} .p-authors{grid-column:span 5;}
-  @media (max-width:900px){ .p-net,.p-journal,.p-map,.p-authors{grid-column:span 12;} }
+  .p-map{grid-column:span 7;} .p-authors{grid-column:span 5;} .p-journey{grid-column:span 12;}
+  @media (max-width:900px){ .p-net,.p-journal,.p-map,.p-authors,.p-journey{grid-column:span 12;} }
 
   .panel .mini-load{display:flex; gap:10px; align-items:center; font-weight:800; color:var(--muted); padding:26px 4px; font-size:14px;}
   .panel .mini-load .spinner{width:18px; height:18px; border-width:3px;}
@@ -242,6 +242,7 @@
   .badge.share:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
   #toast{position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:120; background:var(--ink); color:var(--paper); border:3px solid var(--ink); box-shadow:5px 5px 0 rgba(20,20,20,.3); padding:10px 18px; font-weight:900; font-size:14px; display:none;}
   .btn.time{background:var(--sky); color:var(--ink);}
+  .btn.bib{background:#fff; color:var(--ink);}
   .btn.time.on{background:var(--lime);}
   footer{margin-top:60px; text-align:center; font-weight:700; font-size:13px; color:var(--muted);}
   footer a{font-weight:800;}
@@ -284,6 +285,7 @@
           <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
           <button class="btn mini time" id="timeBtn">🕰️ timeline view</button>
           <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
+          <button class="btn mini bib" id="bibAllBtn" title="Copy BibTeX entries for every paper on the map">📋 BibTeX all</button>
         </div>
         <div id="nettable" style="display:none"></div>
         <div id="areasbox" style="display:none"></div>
@@ -293,6 +295,7 @@
         <div class="tabbar">
           <button class="ptab on" id="tabRank">🏆 JOURNAL RANK</button>
           <button class="ptab" id="tabTrend">📈 CITATION TREND</button>
+          <button class="ptab" id="tabCoauth" style="display:none">🤝 CO-AUTHORS</button>
         </div>
         <div id="rankTab">
           <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
@@ -302,6 +305,10 @@
           <div class="psub">How the citations rolled in, year by year. Hover the bars.</div>
           <div id="trend"></div>
         </div>
+        <div id="coauthTab" style="display:none">
+          <div class="psub">Their most frequent partners in crime, by shared papers. Click a name to scope them.</div>
+          <div id="coauth"></div>
+        </div>
       </section>
 
       <section class="panel p-map">
@@ -309,6 +316,12 @@
         <div class="psub" id="mapsub">Countries of the authors citing this paper.</div>
         <div id="mapbox"></div>
         <div class="cbars bars" id="cbars"></div>
+      </section>
+
+      <section class="panel p-journey" id="journeyPanel" style="display:none">
+        <div class="ptitle">🧭 RESEARCH JOURNEY</div>
+        <div class="psub" id="journeysub">What they've worked on, year by year — papers stacked by subfield.</div>
+        <div id="journey"></div>
       </section>
 
       <section class="panel p-authors">
@@ -403,6 +416,9 @@ $('#modePaper') && document.addEventListener('DOMContentLoaded', () => {});
 
 /* panel headlines per mode */
 function setModeTexts(m) {
+  $('#tabCoauth').style.display = m === 'author' ? '' : 'none';
+  $('#journeyPanel').style.display = m === 'author' ? '' : 'none';
+  if (m !== 'author' && $('#coauthTab').style.display !== 'none' && $('#tabCoauth').classList.contains('on')) setTab('rank');
   if (m === 'author') {
     $('#netTitle').textContent = '🗺️ PAPER PORTFOLIO';
     $('#netsub').textContent = 'Every paper is a bubble — size = citations, color = subfield. Blue links = papers of theirs that cite each other. Click one to scope it, or flip to the timeline for the career view.';
@@ -539,7 +555,7 @@ async function runSearch() {
 }
 
 /* ============ main orchestration ============ */
-const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access';
+const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access,fwci,citation_normalized_percentile,biblio';
 
 async function loadPaper(idOrDoi) {
   showLoading('fetching the paper…');
@@ -621,13 +637,17 @@ function renderHero(w) {
       ${venue ? `<a class="badge v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
       ${topic ? `<a class="badge t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
       ${oa ? `<span class="badge oa">🔓 open access</span>` : ''}
+      ${percChip(w)}
+      ${w.fwci != null ? `<span class="badge v" title="Field-Weighted Citation Impact: citations relative to similar papers (same field, type, and year). 1.0 = exactly average.">⚖️ FWCI ${w.fwci.toFixed(1)} — ${w.fwci >= 1 ? w.fwci.toFixed(1) + '× field average' : 'below field average'}</span>` : ''}
       <a class="badge share" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
+      <button class="badge share" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
       <button class="badge share" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
       <button class="badge share" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
     </div>`;
   renderTrend(w);
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
+  $('#bibBtn').addEventListener('click', () => copyText(bibtexForWork(w), 'BibTeX copied! 📋 paste it into your .bib'));
   document.querySelectorAll('#hero a.au').forEach(a => a.addEventListener('click', ev => {
     ev.preventDefault();
     scrollTo({ top: 0, behavior: 'smooth' });
@@ -680,13 +700,82 @@ function renderTrend(w) {
 
 /* tab switching */
 function setTab(which) {
-  $('#tabRank').classList.toggle('on', which === 'rank');
-  $('#tabTrend').classList.toggle('on', which === 'trend');
-  $('#rankTab').style.display = which === 'rank' ? '' : 'none';
-  $('#trendTab').style.display = which === 'trend' ? '' : 'none';
+  for (const [btn, box, key] of [['#tabRank', '#rankTab', 'rank'], ['#tabTrend', '#trendTab', 'trend'], ['#tabCoauth', '#coauthTab', 'coauth']]) {
+    $(btn).classList.toggle('on', which === key);
+    $(box).style.display = which === key ? '' : 'none';
+  }
 }
 $('#tabRank').addEventListener('click', () => setTab('rank'));
 $('#tabTrend').addEventListener('click', () => setTab('trend'));
+$('#tabCoauth').addEventListener('click', () => setTab('coauth'));
+
+/* ---- context badges ---- */
+function percChip(w) {
+  const p = w.citation_normalized_percentile;
+  if (!p || p.value == null) return '';
+  const top = Math.max(0.1, Math.round((1 - p.value) * 1000) / 10);
+  const label = p.is_in_top_1_percent ? 'top 1%' : p.is_in_top_10_percent ? `top ${Math.max(1, Math.round(top))}%` : `top ${Math.round(top)}%`;
+  const spice = p.is_in_top_1_percent ? '🏆' : p.is_in_top_10_percent ? '🏅' : '📊';
+  return `<span class="badge y" title="Citation percentile vs papers of the same field, type, and publication year — the fair way to compare citation counts.">${spice} ${label} of its field-year</span>`;
+}
+
+/* ---- BibTeX ---- */
+function bibtexForWork(w) {
+  const auths = (w.authorships || []).map(a => a.author && a.author.display_name).filter(Boolean);
+  const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
+  const doi = w.doi ? w.doi.replace('https://doi.org/', '') : null;
+  const b = w.biblio || {};
+  const la = (auths[0] || 'anon').split(/\s+/).pop().replace(/[^A-Za-z]/g, '');
+  const tw = (w.display_name || 'untitled').split(/\s+/).find(x => x.length > 3) || 'work';
+  const key = `${la}${w.publication_year || ''}${tw.toLowerCase().replace(/[^a-z]/g, '')}`;
+  const type = venue ? 'article' : 'misc';
+  const L = [`@${type}{${key},`];
+  L.push(`  title = {{${(w.display_name || '').replace(/[{}]/g, '')}}},`);
+  if (auths.length) L.push(`  author = {${auths.join(' and ')}},`);
+  if (w.publication_year) L.push(`  year = {${w.publication_year}},`);
+  if (venue) L.push(`  journal = {${venue.replace(/[{}]/g, '')}},`);
+  if (b.volume) L.push(`  volume = {${b.volume}},`);
+  if (b.issue) L.push(`  number = {${b.issue}},`);
+  if (b.first_page) L.push(`  pages = {${b.first_page}${b.last_page && b.last_page !== b.first_page ? '--' + b.last_page : ''}},`);
+  if (doi) L.push(`  doi = {${doi}},`);
+  L.push(`  url = {${w.doi || w.id}},`);
+  return L.join('\n') + '\n}';
+}
+
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); toast(msg); }
+  catch (e) {
+    // clipboard blocked (e.g. file://) — hand over a .bib download instead
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = 'paperscope.bib'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('clipboard was shy — downloaded a .bib instead 📥');
+  }
+}
+
+/* batch BibTeX for everything on the map */
+async function copyAllBibtex() {
+  if (!NET) return;
+  const btn = $('#bibAllBtn');
+  btn.disabled = true; btn.textContent = '🍳 cooking…';
+  try {
+    const ids = NET.nodes.filter(n => !n.center).map(n => idTail(n.w.id));
+    const sel = 'id,display_name,publication_year,authorships,primary_location,doi,biblio';
+    const entries = [];
+    for (let i = 0; i < ids.length; i += 50) {
+      const f = ids.slice(i, i + 50).join('|');
+      const j = await getJSONChain([
+        `${API}/works?filter=ids.openalex:${f}&per-page=50&select=${sel}`,
+        `${API}/works?filter=openalex_id:${f}&per-page=50&select=${sel}`,
+      ]);
+      for (const r of (j.results || [])) entries.push(bibtexForWork(r));
+    }
+    if (!entries.length) throw new Error('no entries');
+    await copyText(entries.join('\n\n'), `${entries.length} BibTeX entries copied! 📋`);
+  } catch (e) { toast('BibTeX kitchen fire 🔥 — try again?'); }
+  btn.disabled = false; btn.textContent = '📋 BibTeX all';
+}
 
 /* ---- sharing: permalink, toast, passport card ---- */
 let toastT = null;
@@ -772,6 +861,10 @@ async function loadAuthor(idOrOrcid) {
     renderTrend(a); // authors carry counts_by_year too
     panelSafe(buildPortfolio(a, worksP), '#netbox', 'The portfolio got tangled');
     panelSafe(buildAuthorVenues(a), '#journal', 'Venue list unavailable');
+    $('#coauth').innerHTML = miniLoad('rounding up the partners…');
+    $('#journey').innerHTML = miniLoad('tracing the journey…');
+    panelSafe(buildCoauthors(a), '#coauth', 'Co-author list unavailable');
+    panelSafe(buildJourney(a), '#journey', 'The trail went cold');
     const citersP = fetchAuthorCiters(a, worksP);
     panelSafe(buildAuthorCountries(a, citersP), '#mapbox', 'The globe jammed');
     panelSafe(buildAuthorFans(a, citersP), '#acards', 'The fan club went quiet');
@@ -861,6 +954,98 @@ async function buildPortfolio(a, worksP) {
   drawNetwork();
   $('#netctl').style.display = '';
   window.NET = NET;
+}
+
+/* co-authors: one group_by, self excluded, enriched */
+async function buildCoauthors(a) {
+  const selfId = idTail(a.id);
+  const j = await getJSON(`${API}/works?filter=authorships.author.id:${selfId}&group_by=authorships.author.id`);
+  const groups = (j.group_by || [])
+    .map(g => ({ id: idTail(g.key || ''), name: g.key_display_name, n: g.count }))
+    .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id))
+    .slice(0, 8);
+  const box = $('#coauth');
+  if (!groups.length) { box.innerHTML = '<div class="empty">🐺 A lone wolf — no co-authors on record.</div>'; return; }
+  let enrich = {};
+  try {
+    const f = groups.map(g => g.id).join('|');
+    const sel = 'id,display_name,summary_stats,last_known_institutions';
+    const jj = await getJSONChain([
+      `${API}/authors?filter=ids.openalex:${f}&per-page=25&select=${sel}`,
+      `${API}/authors?filter=openalex:${f}&per-page=25&select=${sel}`,
+    ]);
+    for (const x of (jj.results || [])) enrich[idTail(x.id)] = x;
+  } catch (e) {}
+  const maxV = groups[0].n;
+  box.innerHTML = '';
+  const bars = el('div', 'bars');
+  groups.forEach((g, i) => {
+    const e2 = enrich[g.id] || {};
+    const lki = e2.last_known_institutions && e2.last_known_institutions[0];
+    const row = el('div', 'brow');
+    row.innerHTML = `
+      <span class="nm"><span class="pos">#${i + 1}</span><a href="#" data-aid="${esc(g.id)}" title="Scope this researcher">${esc(g.name || 'Unknown')}</a>${lki && lki.country_code ? ' <span class="flag">' + flag(lki.country_code) + '</span>' : ''}${e2.summary_stats && e2.summary_stats.h_index != null ? ` <span class="apill h" style="font-size:10px">h ${e2.summary_stats.h_index}</span>` : ''}</span>
+      <span class="val">${fmt(g.n)} together</span>
+      <span class="track"><span class="fill" style="width:${Math.max(3, 100 * g.n / maxV)}%"></span></span>`;
+    row.querySelector('a[data-aid]').addEventListener('click', ev => { ev.preventDefault(); scrollTo({ top: 0, behavior: 'smooth' }); loadAuthor(g.id); });
+    bars.appendChild(row);
+  });
+  box.appendChild(bars);
+}
+
+/* research journey: stacked subfield areas over the years */
+async function buildJourney(a) {
+  const j = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&sort=publication_date:desc&per-page=200&select=publication_year,primary_topic`);
+  const works = (j.results || []).filter(x => x.publication_year);
+  const total = (j.meta && j.meta.count) || works.length;
+  const box = $('#journey');
+  if (works.length < 3) { box.innerHTML = '<div class="empty">🌱 Not enough papers yet to chart a journey.</div>'; return; }
+  const sub = x => (x.primary_topic && ((x.primary_topic.subfield && x.primary_topic.subfield.display_name) || (x.primary_topic.field && x.primary_topic.field.display_name))) || 'Uncharted';
+  const totals = {};
+  for (const x of works) totals[sub(x)] = (totals[sub(x)] || 0) + 1;
+  const top = Object.entries(totals).sort((p, q) => q[1] - p[1]).slice(0, 5).map(e => e[0]);
+  const grp = x => top.includes(sub(x)) ? sub(x) : 'Other';
+  const series = top.slice(); if (Object.keys(totals).length > 5) series.push('Other');
+  const y0 = Math.min(...works.map(x => x.publication_year)), y1 = Math.max(...works.map(x => x.publication_year));
+  const years = []; for (let y = y0; y <= y1; y++) years.push(y);
+  const counts = years.map(y => { const c = {}; for (const k of series) c[k] = 0; return c; });
+  for (const x of works) counts[x.publication_year - y0][grp(x)]++;
+
+  const W = Math.max(320, (box.clientWidth || 800) - 6), H = 260, PAD = 40, BOT = 30;
+  const maxTot = Math.max(...counts.map(c => series.reduce((s2, k) => s2 + c[k], 0)), 1);
+  const px = i => PAD + (years.length === 1 ? 0 : i * (W - PAD - 12) / (years.length - 1));
+  const py = v => (H - BOT) - v * (H - BOT - 16) / maxTot;
+  let paths = '';
+  const cum = counts.map(() => 0);
+  series.forEach((k, si) => {
+    const topPts = years.map((y, i) => { cum[i] += counts[i][k]; return [px(i), py(cum[i])]; });
+    const botPts = years.map((y, i) => [px(i), py(cum[i] - counts[i][k])]).reverse();
+    const d = 'M' + topPts.map(p => p.map(v => Math.round(v * 10) / 10).join(',')).join(' L') + ' L' + botPts.map(p => p.map(v => Math.round(v * 10) / 10).join(',')).join(' L') + ' Z';
+    const col = k === 'Other' ? '#8a8578' : PALETTE[si];
+    paths += `<path d="${d}" fill="${col}" fill-opacity="0.85" stroke="#141414" stroke-width="2"></path>`;
+  });
+  let axis = '';
+  const step = Math.max(1, Math.ceil(years.length / 10));
+  for (let i = 0; i < years.length; i += step) axis += `<text x="${px(i)}" y="${H - 8}" text-anchor="${i >= years.length - step ? 'end' : 'middle'}" font-size="11.5" font-weight="800" fill="#898781">${years[i]}</text>`;
+  axis += `<text x="12" y="${py(maxTot) + 4}" font-size="11" font-weight="800" fill="#898781">${maxTot}</text>`;
+  axis += `<text x="12" y="${H - BOT + 4}" font-size="11" font-weight="800" fill="#898781">0</text>`;
+
+  box.innerHTML = `<div class="trend-chart" style="position:relative">
+      <svg id="journeySvg" width="${W}" height="${H}">${paths}${axis}</svg>
+    </div>
+    <div class="legend" style="margin-top:12px">${series.map((k, si) => `<span class="lg"><i style="background:${k === 'Other' ? '#8a8578' : PALETTE[si]}"></i>${esc(k)} (${fmt(k === 'Other' ? works.length - top.reduce((s2, t) => s2 + totals[t], 0) : totals[k])})</span>`).join('')}</div>
+    ${total > works.length ? `<div class="psub" style="margin-top:8px">Based on their ${works.length} most recent papers (of ${fmt(total)}).</div>` : ''}`;
+
+  // hover: nearest-year breakdown
+  const svg = $('#journeySvg');
+  svg.addEventListener('pointermove', e => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.max(0, Math.min(years.length - 1, Math.round((e.clientX - r.left - PAD) / ((W - PAD - 12) / Math.max(1, years.length - 1)))));
+    const c = counts[i];
+    const rows = series.filter(k => c[k]).map(k => `${esc(k)}: ${c[k]}`).join('<br>');
+    tipShow(`<div class="tt">${years[i]}</div><div class="tm">${rows || 'no papers'}</div>`, e.clientX, e.clientY);
+  });
+  svg.addEventListener('pointerleave', tipHide);
 }
 
 /* citing works for the author's top papers (one OR-batched query) */
@@ -1224,6 +1409,7 @@ $('#timeBtn').addEventListener('click', () => {
 });
 
 $('#moreBtn').addEventListener('click', spawnMore);
+$('#bibAllBtn').addEventListener('click', copyAllBibtex);
 $('#tableBtn').addEventListener('click', () => {
   if (!NET) return;
   NET.tableOpen = !NET.tableOpen;
