@@ -183,13 +183,13 @@ function routeFor(url) {
   checks.cbars = await page.textContent('#cbars');
   checks.authors = await page.textContent('#acards');
   checks.mapsub = await page.textContent('#mapsub');
-  checks.s2 = await page.textContent('#s2badge');
-  checks.venueBadge = await page.getAttribute('.badge.v', 'href');
+  checks.s2 = await page.textContent('#citeChip');
+  checks.venueBadge = await page.getAttribute('.chip.v', 'href');
   checks.rankLink = await page.getAttribute('.rank-ctx a', 'href');
   checks.leaderLink = await page.getAttribute('.bars .brow .nm a', 'href');
   checks.countryLink = await page.getAttribute('#cbars a.brow', 'href');
   checks.instLink = await page.getAttribute('.acard .inst a', 'href');
-  checks.gsLink = await page.getAttribute('.badge.gs', 'href');
+  checks.gsLink = await page.getAttribute('.toolbar a.tool:nth-of-type(2)', 'href');
   const netCanvas = await page.$('#net'); checks.netCanvas = !!netCanvas;
   const mapCanvas = await page.$('#worldmap'); checks.mapCanvas = !!mapCanvas;
 
@@ -202,7 +202,7 @@ function routeFor(url) {
   }
   // fwci + percentile badges, bibtex
   const heroTxt = await page.textContent('#hero');
-  checks.fwciBadge = heroTxt.includes('FWCI 208.6');
+  checks.fwciBadge = heroTxt.includes('208.6× field avg');
   checks.percBadge = heroTxt.includes('top 1%');
   await page.click('#bibBtn');
   await page.waitForTimeout(300);
@@ -220,7 +220,7 @@ function routeFor(url) {
   await page.screenshot({ path: 'shot_trend.png' });
   await page.click('#tabRank');
   checks.rankBack = await page.$eval('#rankTab', el => el.style.display !== 'none');
-  checks.originalLink = await page.getAttribute('.hero a.badge.share[target=_blank]', 'href');
+  checks.originalLink = await page.getAttribute('.toolbar a.tool', 'href');
   checks.permalink = await page.evaluate(() => location.search);
   checks.edges = await page.evaluate(() => window.NET.edges.length);
   checks.realCiteHubs = await page.evaluate(() => window.NET.nodes.filter(n => n.realCite).length);
