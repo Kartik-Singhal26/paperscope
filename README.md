@@ -4,7 +4,7 @@
 
 A single-file web app for paper analytics. Type a paper title (with live autocomplete) or paste a DOI, and PaperScope builds a neo-brutalist dashboard around it:
 
-- 🕸️ **Similar-paper map** — an interactive force-directed network of OpenAlex "related works" plus the topic's most-cited papers. Node size = citations, color = field. Drag nodes, click to open, spotlight a field via the legend, spawn more papers on demand, or flip open a table of all papers ranked by a 0–100 closeness score.
+- 🕸️ **Similar-paper map** — an interactive force-directed network of OpenAlex "related works" plus the topic's most-cited papers. Node size = citations, color = subfield (OpenAlex topic hierarchy; falls back to field). Drag nodes, click to open, spotlight a field via the legend, spawn more papers on demand, or flip open a table of all papers ranked by a 0–100 closeness score.
 - 🏆 **Journal rank** — the venue's exact rank among all venues in the paper's subject, shown through two lenses: 2-yr mean citedness (impact-factor cousin) and h-index (harder to game). Top-5 leaderboard included.
 - 🌍 **Who cites it, where** — a dot-grid world map with clickable bubbles for the author countries of every citing paper, plus a top-8 country list linking to the actual papers.
 - 🧑‍🔬 **The citing crew** — profile cards for the most frequent citing authors: institution, country, h-index, works, citations.
