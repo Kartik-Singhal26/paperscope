@@ -589,9 +589,12 @@ function downloadPassport() {
   const x = cv.getContext('2d');
   x.fillStyle = '#FFF8EC'; x.fillRect(0, 0, 1000, 560);
   x.strokeStyle = '#141414'; x.lineWidth = 14; x.strokeRect(7, 7, 986, 546);
-  x.fillStyle = '#141414'; x.fillRect(40, 40, 330, 56);
-  x.fillStyle = '#FFF8EC'; x.font = '900 30px system-ui'; x.textBaseline = 'middle';
-  x.fillText('🛂 CITATION PASSPORT', 56, 70);
+  x.font = '900 30px system-ui';
+  const hdr = '🛂 CITATION PASSPORT';
+  const hdrW = x.measureText(hdr).width;
+  x.fillStyle = '#141414'; x.fillRect(40, 40, hdrW + 36, 58);
+  x.fillStyle = '#FFF8EC'; x.textBaseline = 'middle';
+  x.fillText(hdr, 58, 71);
   x.fillStyle = '#141414'; x.font = '900 34px system-ui'; x.textBaseline = 'alphabetic';
   const words = (w.display_name || '').split(' '); let line = '', lines = [];
   for (const wd of words) { if (x.measureText(line + ' ' + wd).width > 900) { lines.push(line); line = wd; } else line = line ? line + ' ' + wd : wd; }
@@ -605,6 +608,7 @@ function downloadPassport() {
   x.fillText(`${fmt(w.cited_by_count)} citations · ${w.publication_year || ''}`, 48, 460);
   x.font = '900 24px system-ui'; x.fillStyle = '#141414';
   x.fillText('made with PaperScope 🔭', 48, 512);
+  window.__lastPassport = cv; // testability hook
   cv.toBlob(b => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(b); a.download = 'citation-passport.png'; a.click();
