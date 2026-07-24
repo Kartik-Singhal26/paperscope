@@ -254,7 +254,7 @@
     <div class="grid">
       <section class="panel p-net">
         <div class="ptitle">🕸️ SIMILAR-PAPER MAP</div>
-        <div class="psub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = field. Drag nodes! Click to open.</div>
+        <div class="psub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = subfield. Drag nodes! Click to open.</div>
         <div id="netbox"></div>
         <div class="legend" id="netlegend"></div>
         <div class="netctl" id="netctl" style="display:none">
@@ -545,7 +545,7 @@ function closenessScore(mainW, n) {
   return Math.round(Math.min(100, s));
 }
 
-const fieldOf = n => (n.w.primary_topic && n.w.primary_topic.field && n.w.primary_topic.field.display_name) || 'Unknown field';
+const fieldOf = n => (n.w.primary_topic && ((n.w.primary_topic.subfield && n.w.primary_topic.subfield.display_name) || (n.w.primary_topic.field && n.w.primary_topic.field.display_name))) || 'Unknown field';
 function netGroup(n) { return NET.shown.includes(fieldOf(n)) ? fieldOf(n) : '__other'; }
 function netColor(n) { const i = NET.shown.indexOf(fieldOf(n)); return i === -1 ? '#8a8578' : PALETTE[i]; }
 
