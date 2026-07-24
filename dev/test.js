@@ -3,7 +3,7 @@ const { chromium } = require('playwright');
 const work = (id, name, year, cites, field, topic) => ({
   id: `https://openalex.org/${id}`, display_name: name, publication_year: year,
   cited_by_count: cites, doi: `https://doi.org/10.1000/${id}`,
-  primary_topic: { id: 'https://openalex.org/T10102', display_name: topic || 'Scientometrics', field: { id: 'https://openalex.org/fields/18', display_name: field || 'Decision Sciences' } },
+  primary_topic: { id: 'https://openalex.org/T10102', display_name: topic || 'Scientometrics', subfield: { id: 'https://openalex.org/subfields/1802', display_name: (field || 'Decision Sciences') + ' — Applied' }, field: { id: 'https://openalex.org/fields/18', display_name: field || 'Decision Sciences' } },
 });
 
 const MAIN = {
@@ -15,10 +15,19 @@ const MAIN = {
   topics: [], concepts: [{ id: 'https://openalex.org/C154945302', display_name: 'Artificial intelligence', score: 0.9 }],
   primary_location: { source: { id: 'https://openalex.org/S1983995261', display_name: 'NeurIPS', type: 'conference' } },
   related_works: Array.from({ length: 10 }, (_, i) => `https://openalex.org/W90${i}`),
+  referenced_works: ['https://openalex.org/W900', 'https://openalex.org/W901'],
+  counts_by_year: Array.from({ length: 9 }, (_, i) => ({ year: 2018 + i, cited_by_count: [500, 1500, 4000, 9000, 16000, 26000, 30000, 34000, 12000][i] })),
   open_access: { is_oa: true },
 };
+// related papers cite each other: W901->W900, W902->W900, W903->W901
+for (const [a, b] of [[1, 0], [2, 0], [3, 1]]) {
+  // patched into relatedBatch after its definition below
+}
 
 const relatedBatch = { results: Array.from({ length: 10 }, (_, i) => work(`W90${i}`, `Related paper number ${i} with a long-ish title`, 2015 + i, 50 * (i + 1), ['Computer Science', 'Mathematics', 'Engineering'][i % 3])) , meta: { count: 10 } };
+relatedBatch.results[1].referenced_works = ['https://openalex.org/W900', 'https://openalex.org/W2741809807'];
+relatedBatch.results[2].referenced_works = ['https://openalex.org/W900'];
+relatedBatch.results[3].referenced_works = ['https://openalex.org/W901'];
 const topicTop = { results: Array.from({ length: 8 }, (_, i) => work(`W80${i}`, `Topic heavyweight ${i}`, 2010 + i, 900 - i * 100, 'Computer Science')), meta: { count: 8 } };
 const topicTop2 = { results: Array.from({ length: 9 }, (_, i) => work(`W81${i}`, `Freshly spawned paper ${i}`, 2019, 400 - i * 30, ['Physics', 'Computer Science'][i % 2])), meta: { count: 9 } };
 
@@ -140,6 +149,19 @@ function routeFor(url) {
     await page.waitForTimeout(300);
     checks.tooltipVisible = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
   }
+  // sparkline, permalink, edges, timeline
+  checks.spark = await page.$eval('#sparkrow', el => el.textContent.trim().slice(0, 80));
+  checks.sparkBars = await page.$$eval('#sparkrow rect', els => els.length);
+  checks.permalink = await page.evaluate(() => location.search);
+  checks.edges = await page.evaluate(() => window.NET.edges.length);
+  checks.realCiteHubs = await page.evaluate(() => window.NET.nodes.filter(n => n.realCite).length);
+  await page.click('#timeBtn');
+  await page.waitForTimeout(900);
+  checks.mode = await page.evaluate(() => window.NET.mode);
+  await page.screenshot({ path: 'shot_timeline.png' });
+  await page.click('#timeBtn');
+  checks.modeBack = await page.evaluate(() => window.NET.mode);
+
   // network interactions: legend isolation, spawn, closeness table
   checks.nodesBefore = await page.evaluate(() => window.NET.nodes.length);
   await page.click('#netlegend .lg');                       // isolate first field

@@ -4,10 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PaperScope 🔭 — feed it a paper, get the whole story</title>
-<script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
 <style>
   :root{
     --paper:#FFF8EC; --page:#F5EBD8; --ink:#141414; --muted:#6b6357;
@@ -224,6 +220,15 @@
   #tip .tt{font-weight:900;}
   #tip .tm{opacity:.75; font-size:11.5px;}
 
+  .spark-row{display:flex; align-items:center; gap:14px; margin-top:16px; flex-wrap:wrap;}
+  .spark-box{border:3px solid var(--ink); background:#fff; padding:6px 10px 4px; box-shadow:3px 3px 0 var(--ink);}
+  .spark-cap{font-size:10.5px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-top:2px;}
+  .verdict{border:3px solid var(--ink); padding:5px 12px; font-weight:900; font-size:13px; box-shadow:3px 3px 0 var(--ink); background:var(--lime); transform:rotate(-1deg);}
+  .badge.share{cursor:pointer; background:#fff;}
+  .badge.share:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
+  #toast{position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:120; background:var(--ink); color:var(--paper); border:3px solid var(--ink); box-shadow:5px 5px 0 rgba(20,20,20,.3); padding:10px 18px; font-weight:900; font-size:14px; display:none;}
+  .btn.time{background:var(--sky); color:var(--ink);}
+  .btn.time.on{background:var(--lime);}
   footer{margin-top:60px; text-align:center; font-weight:700; font-size:13px; color:var(--muted);}
   footer a{font-weight:800;}
   .foot-sticker{display:inline-block; background:var(--paper); border:3px solid var(--ink); box-shadow:var(--bs-sm); padding:8px 14px; transform:rotate(-.6deg);}
@@ -259,6 +264,7 @@
         <div class="legend" id="netlegend"></div>
         <div class="netctl" id="netctl" style="display:none">
           <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
+          <button class="btn mini time" id="timeBtn">🕰️ timeline view</button>
           <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
         </div>
         <div id="nettable" style="display:none"></div>
@@ -287,9 +293,10 @@
 
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
-    <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>  </footer>
+  </footer>
 </div>
 <div id="tip"></div>
+<div id="toast"></div>
 
 <script>
 /* ============ embedded world map data (generated from world-atlas + world-countries) ============ */
@@ -440,7 +447,7 @@ async function runSearch() {
 }
 
 /* ============ main orchestration ============ */
-const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access';
+const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access';
 
 async function loadPaper(idOrDoi) {
   showLoading('fetching the paper…');
@@ -449,6 +456,7 @@ async function loadPaper(idOrDoi) {
     const w = await getJSON(`${API}/works/${encodeURIComponent(idOrDoi).replace(/%3A/g,':').replace(/%2F/g,'/')}?select=${WORK_SELECT}`);
     clearStatus();
     renderHero(w);
+    setPermalink(w);
     enrichSemanticScholar(w); // best-effort second opinion on citations
     $('#results').className = 'on';
     // fire the four panels independently — each has its own loading + error state
@@ -517,12 +525,97 @@ function renderHero(w) {
       ${venue ? `<a class="badge v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
       ${topic ? `<a class="badge t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
       ${oa ? `<span class="badge oa">🔓 open access</span>` : ''}
-    </div>`;
+      <button class="badge share" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
+      <button class="badge share" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
+    </div>
+    <div class="spark-row" id="sparkrow"></div>`;
+  renderSparkline(w);
+  $('#shareBtn').addEventListener('click', copyPermalink);
+  $('#passportBtn').addEventListener('click', downloadPassport);
+}
+
+/* ---- citation-velocity sparkline + verdict ---- */
+function renderSparkline(w) {
+  const row = $('#sparkrow');
+  const cby = (w.counts_by_year || []).slice().sort((a, b) => a.year - b.year).slice(-12);
+  if (cby.length < 2) { row.innerHTML = w.publication_year >= new Date().getFullYear() - 1 ? '<span class="verdict">🌱 fresh out of the oven — no trend yet</span>' : ''; return; }
+  const now = new Date().getFullYear();
+  const max = Math.max(...cby.map(c => c.cited_by_count), 1);
+  const bw = 13, gap = 4, h = 44;
+  let bars = '';
+  cby.forEach((c, i) => {
+    const bh = Math.max(2, Math.round((c.cited_by_count / max) * (h - 6)));
+    const partial = c.year === now;
+    bars += `<rect x="${i * (bw + gap)}" y="${h - bh}" width="${bw}" height="${bh}" fill="${partial ? '#9ec5f4' : '#3A86FF'}" stroke="#141414" stroke-width="2"><title>${c.year}${partial ? ' (so far)' : ''}: ${fmt(c.cited_by_count)} citations</title></rect>`;
+  });
+  const svgW = cby.length * (bw + gap) - gap;
+  // verdict: recent complete years vs the stretch before them
+  const complete = cby.filter(c => c.year < now);
+  let verdict = '📈 steady as she goes';
+  if (complete.length >= 4) {
+    const recent = complete.slice(-2).reduce((a, c) => a + c.cited_by_count, 0) / 2;
+    const older = complete.slice(0, -2).slice(-3).reduce((a, c) => a + c.cited_by_count, 0) / Math.max(1, complete.slice(0, -2).slice(-3).length);
+    if (recent > older * 1.25) verdict = '🚀 heating up';
+    else if (recent < older * 0.6) verdict = (now - (w.publication_year || now)) > 10 ? '🏛️ elder statesman — done its damage' : '📉 cooling off';
+  } else verdict = '🌱 young — trend still forming';
+  row.innerHTML = `<span class="spark-box"><svg width="${svgW}" height="${h}" role="img" aria-label="Citations per year">${bars}</svg>
+    <div class="spark-cap">citations / year (${cby[0].year}–${cby[cby.length - 1].year})</div></span>
+    <span class="verdict">${verdict}</span>`;
+}
+
+/* ---- sharing: permalink, toast, passport card ---- */
+let toastT = null;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastT); toastT = setTimeout(() => { t.style.display = 'none'; }, 2200);
+}
+function setPermalink(w) {
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set('w', idTail(w.id));
+    history.replaceState(null, '', u);
+  } catch (e) { /* file:// in some browsers */ }
+}
+async function copyPermalink() {
+  const link = location.href;
+  try { await navigator.clipboard.writeText(link); toast('link copied! 📋 send it to a friend'); }
+  catch (e) { prompt('Copy this link:', link); }
+}
+let PASSPORT = null; // {w, entries}
+function downloadPassport() {
+  if (!PASSPORT || !PASSPORT.entries || !PASSPORT.entries.length) { toast('hold on — still mapping the countries 🌍'); return; }
+  const { w, entries } = PASSPORT;
+  const cv = document.createElement('canvas'); cv.width = 1000; cv.height = 560;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#FFF8EC'; x.fillRect(0, 0, 1000, 560);
+  x.strokeStyle = '#141414'; x.lineWidth = 14; x.strokeRect(7, 7, 986, 546);
+  x.fillStyle = '#141414'; x.fillRect(40, 40, 330, 56);
+  x.fillStyle = '#FFF8EC'; x.font = '900 30px system-ui'; x.textBaseline = 'middle';
+  x.fillText('🛂 CITATION PASSPORT', 56, 70);
+  x.fillStyle = '#141414'; x.font = '900 34px system-ui'; x.textBaseline = 'alphabetic';
+  const words = (w.display_name || '').split(' '); let line = '', lines = [];
+  for (const wd of words) { if (x.measureText(line + ' ' + wd).width > 900) { lines.push(line); line = wd; } else line = line ? line + ' ' + wd : wd; }
+  lines.push(line);
+  lines.slice(0, 2).forEach((l, i) => x.fillText(i === 1 && lines.length > 2 ? l + '…' : l, 48, 160 + i * 44));
+  x.font = '900 64px system-ui'; x.fillStyle = '#FB5607';
+  x.fillText(`cited in ${entries.length} ${entries.length === 1 ? 'country' : 'countries'}`, 48, 320);
+  x.font = '44px system-ui'; x.fillStyle = '#141414';
+  x.fillText(entries.slice(0, 12).map(e => flag(e[0])).join(' '), 48, 396);
+  x.font = '800 26px system-ui'; x.fillStyle = '#6b6357';
+  x.fillText(`${fmt(w.cited_by_count)} citations · ${w.publication_year || ''}`, 48, 460);
+  x.font = '900 24px system-ui'; x.fillStyle = '#141414';
+  x.fillText('made with PaperScope 🔭', 48, 512);
+  cv.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = 'citation-passport.png'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('passport stamped! 🛂 check your downloads');
+  });
 }
 
 /* ============ panel 1: similar-papers network ============ */
 let NET = null; // live network state (persists across spawns, reset per paper)
-const NET_SEL = 'id,display_name,publication_year,cited_by_count,primary_topic,topics,doi';
+const NET_SEL = 'id,display_name,publication_year,cited_by_count,referenced_works,primary_topic,topics,doi';
 const NET_CAP = 60;
 
 /* Closeness: 0-100 heuristic mix of OpenAlex's related-list position (45), topic
@@ -556,6 +649,7 @@ async function buildNetwork(w) {
   $('#nettable').style.display = 'none'; $('#nettable').innerHTML = '';
   const tb = $('#tableBtn'); tb.classList.remove('open'); tb.innerHTML = '<span class="arr">▸</span> closeness table';
   const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🪄 Spawn more papers';
+  const tmb = $('#timeBtn'); tmb.classList.remove('on'); tmb.textContent = '🕰️ timeline view';
 
   const relIds = (w.related_works || []).map(idTail).filter(Boolean).slice(0, 12);
   const jobs = [];
@@ -589,13 +683,48 @@ async function buildNetwork(w) {
   }
   if (nodes.length < 2) { $('#netbox').innerHTML = '<div class="empty">🕳️ OpenAlex lists no related papers for this one. A lone wolf!</div>'; return; }
 
-  NET = { w, nodes, seen, topicId, topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null };
+  NET = { w, nodes, seen, topicId, topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null, mode: 'force', edges: [] };
   for (const n of nodes) if (!n.center) n.close = closenessScore(w, n);
+  computeEdges();
   refreshFields();
   renderNetLegend();
   drawNetwork();
   $('#netctl').style.display = '';
   window.NET = NET; // handy for debugging
+}
+
+/* Real citation edges: node A -> node B when A's reference list contains B.
+   Center hub links get promoted to 'real' when an actual citation exists. */
+function computeEdges() {
+  const byId = new Map(NET.nodes.map(n => [idTail(n.w.id), n]));
+  const seenPair = new Set();
+  NET.edges = [];
+  for (const n of NET.nodes) {
+    for (const ref of (n.w.referenced_works || [])) {
+      const m = byId.get(idTail(ref));
+      if (!m || m === n) continue;
+      if (n.center || m.center) { (n.center ? m : n).realCite = true; continue; }
+      const key = [idTail(n.w.id), idTail(m.w.id)].sort().join('|');
+      if (seenPair.has(key)) continue; seenPair.add(key);
+      NET.edges.push({ a: n, b: m });
+    }
+  }
+}
+
+/* Timeline layout targets: x = publication year, y = citations (sqrt scale) */
+function computeTimeTargets() {
+  const ns = NET.nodes, W = NET.W, H = NET.H;
+  const years = ns.map(n => n.w.publication_year).filter(Boolean);
+  const y0 = Math.min(...years), y1 = Math.max(...years);
+  const span = Math.max(1, y1 - y0);
+  const maxC = Math.max(...ns.map(n => n.w.cited_by_count || 1));
+  for (const n of ns) {
+    const yr = n.w.publication_year || y0;
+    n.tx = 46 + ((yr - y0) / span) * (W - 92);
+    const v = Math.log(1 + (n.w.cited_by_count || 1)) / Math.log(1 + maxC);
+    n.ty = (H - 52) - v * (H - 110);
+  }
+  NET.timeAxis = { y0, y1, span };
 }
 
 function refreshFields() {
@@ -646,6 +775,8 @@ async function spawnMore() {
       NET.nodes.push(n); added++;
     }
     resizeNodes();
+    computeEdges();
+    if (NET.mode === 'time') computeTimeTargets();
     refreshFields();
     renderNetLegend();
     if (NET.tableOpen) renderNetTable();
@@ -678,6 +809,20 @@ function renderNetTable() {
     box.appendChild(a);
   });
 }
+
+// boot: open straight to a paper if the URL carries one
+try {
+  const bootW = new URLSearchParams(location.search).get('w');
+  if (bootW && /^W\d+$/.test(bootW)) loadPaper(bootW);
+} catch (e) {}
+
+$('#timeBtn').addEventListener('click', () => {
+  if (!NET) return;
+  NET.mode = NET.mode === 'time' ? 'force' : 'time';
+  $('#timeBtn').classList.toggle('on', NET.mode === 'time');
+  $('#timeBtn').textContent = NET.mode === 'time' ? '🕸️ web view' : '🕰️ timeline view';
+  if (NET.mode === 'time') computeTimeTargets();
+});
 
 $('#moreBtn').addEventListener('click', spawnMore);
 $('#tableBtn').addEventListener('click', () => {
@@ -715,6 +860,23 @@ function drawNetwork() {
 
   let dragging = null, hover = null;
   function physics() {
+    if (NET.mode === 'time') {
+      for (const n of nodes) {
+        if (n === dragging) continue;
+        n.x += ((n.tx ?? n.x) - n.x) * 0.14;
+        n.y += ((n.ty ?? n.y) - n.y) * 0.14;
+        if (n.fresh) n.fresh--;
+      }
+      return;
+    }
+    // spring along real citation edges
+    for (const e of NET.edges) {
+      const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
+      const d = Math.hypot(dx, dy) || 1, want = e.a.r + e.b.r + 70;
+      const f = (d - want) * 0.0035;
+      if (e.a !== dragging && !e.a.center) { e.a.vx += (dx / d) * f * 4; e.a.vy += (dy / d) * f * 4; }
+      if (e.b !== dragging && !e.b.center) { e.b.vx -= (dx / d) * f * 4; e.b.vy -= (dy / d) * f * 4; }
+    }
     for (let i = 1; i < nodes.length; i++) {
       const n = nodes[i];
       if (n.fresh) n.fresh--;
@@ -739,12 +901,42 @@ function drawNetwork() {
   }
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
-    for (let i = 1; i < nodes.length; i++) {
-      ctx.strokeStyle = dimmed(nodes[i]) ? 'rgba(20,20,20,.07)' : 'rgba(20,20,20,.35)';
-      ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(nodes[i].x, nodes[i].y); ctx.stroke();
+    // timeline axis
+    if (NET.mode === 'time' && NET.timeAxis) {
+      const { y0, y1, span } = NET.timeAxis;
+      ctx.strokeStyle = '#c3c2b7'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(30, H - 28); ctx.lineTo(W - 30, H - 28); ctx.stroke();
+      ctx.fillStyle = '#898781'; ctx.font = '800 11px system-ui'; ctx.textAlign = 'center';
+      const step = Math.max(1, Math.ceil(span / 6));
+      for (let yr = y0; yr <= y1; yr += step) {
+        const px = 46 + ((yr - y0) / span) * (W - 92);
+        ctx.fillText(String(yr), px, H - 12);
+        ctx.strokeStyle = '#e1e0d9'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(px, 20); ctx.lineTo(px, H - 32); ctx.stroke();
+      }
+      ctx.save(); ctx.translate(14, H / 2); ctx.rotate(-Math.PI / 2);
+      ctx.fillText('citations →', 0, 0); ctx.restore();
+      ctx.textAlign = 'start';
     }
-    ctx.setLineDash([]);
+    // hub links (association) — hidden in timeline mode
+    if (NET.mode !== 'time') {
+      ctx.lineWidth = 2;
+      for (let i = 1; i < nodes.length; i++) {
+        const n = nodes[i];
+        const faded = dimmed(n);
+        if (n.realCite) { ctx.setLineDash([]); ctx.strokeStyle = faded ? 'rgba(20,20,20,.07)' : 'rgba(20,20,20,.45)'; }
+        else { ctx.setLineDash([6, 5]); ctx.strokeStyle = faded ? 'rgba(20,20,20,.05)' : 'rgba(20,20,20,.22)'; }
+        ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(n.x, n.y); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+    // real citation edges between orbit papers
+    ctx.lineWidth = 2.5;
+    for (const e of NET.edges) {
+      const faded = dimmed(e.a) || dimmed(e.b);
+      ctx.strokeStyle = faded ? 'rgba(58,134,255,.08)' : 'rgba(58,134,255,.55)';
+      ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
+    }
     for (const n of nodes) {
       const dim = dimmed(n);
       ctx.globalAlpha = dim ? 0.15 : 1;
@@ -916,6 +1108,7 @@ async function buildCountries(w, citersP) {
     return;
   }
   $('#mapsub').textContent = 'Author countries across ' + basis + '. Hover the bubbles — click one to see those papers!';
+  PASSPORT = { w, entries };
   drawWorld(entries, wid);
 
   // top-8 bars
