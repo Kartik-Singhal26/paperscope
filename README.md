@@ -9,7 +9,9 @@ A single-file web app for paper analytics. Type a paper title (with live autocom
 - 🌍 **Who cites it, where** — a dot-grid world map with clickable bubbles for the author countries of every citing paper, plus a top-8 country list linking to the actual papers.
 - 🧑‍🔬 **The citing crew** — profile cards for the most frequent citing authors: institution, country, h-index, works, citations.
 
-**Author mode** (🧑‍🔬 toggle): type a researcher's name or paste an ORCID for a whole-career dashboard — paper portfolio map with self-citation links, career timeline, top venues, citation trend, fan countries, top citing authors, and a self-citation "organic rate."
+Papers carry **FWCI and field-percentile badges** ("top 1% of its field-year"), and everything exports to **BibTeX** — single papers or the whole map at once.
+
+**Author mode** (🧑‍🔬 toggle): type a researcher's name or paste an ORCID for a whole-career dashboard — paper portfolio map with self-citation links, career timeline, top venues, citation trend, fan countries, top citing authors, a self-citation "organic rate," a co-authors tab, and a research-journey chart of their subfields over the years.
 
 Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose broader corpus usually sits closer to Google Scholar's number), with a one-click Google Scholar link. The 🎲 button rolls a random paper from OpenAlex's ~250M-work catalog.
 
