@@ -250,7 +250,22 @@
   .badge.share:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink);}
   #toast{position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:120; background:var(--ink); color:var(--paper); border:3px solid var(--ink); box-shadow:5px 5px 0 rgba(20,20,20,.3); padding:10px 18px; font-weight:900; font-size:14px; display:none;}
   .btn.time{background:var(--sky); color:var(--ink);}
-  .btn.bib{background:#fff; color:var(--ink);}
+  .btn.bib{background:#fff; color:var(--ink); font-size:11.5px; padding:5px 10px; margin-left:auto; box-shadow:3px 3px 0 var(--ink); align-self:center;}
+  .corow{display:flex; align-items:center; gap:8px; padding:7px 2px; border-bottom:2px dashed rgba(20,20,20,.15); font-size:13px; font-weight:700;}
+  .corow:last-of-type{border-bottom:none;}
+  .corow .pos{color:var(--muted); font-weight:800; flex:none;}
+  .corow .conm{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .corow .conm a{text-decoration:none;}
+  .corow .conm a:hover{background:var(--sky);}
+  .cobar{height:12px; border:2.5px solid var(--ink); background:#fff; width:110px; position:relative; flex:none; margin-left:auto;}
+  .cofill{position:absolute; inset:0; right:auto; background:var(--c1);}
+  .corow .cn{font-weight:900; flex:none; width:36px; text-align:right; font-variant-numeric:tabular-nums;}
+  .cohead{font-weight:900; font-size:13px; margin:14px 0 6px;}
+  .cochip{border:2.5px solid var(--ink); padding:2px 9px; font-size:12px; font-weight:800; background:#fff; text-decoration:none; color:var(--ink); display:inline-block; margin:0 6px 7px 0; box-shadow:2px 2px 0 var(--ink);}
+  .cochip:hover{background:var(--sky); transform:translate(-1px,-1px);}
+  .jcell{height:27px; border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;}
+  .jlabel{font-size:12px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:6px;}
+  .jyear{font-size:10.5px; font-weight:800; color:var(--muted); text-align:center;}
   .btn.time.on{background:var(--lime);}
   footer{margin-top:60px; text-align:center; font-weight:700; font-size:13px; color:var(--muted);}
   footer a{font-weight:800;}
@@ -293,7 +308,7 @@
           <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
           <button class="btn mini time" id="timeBtn">🕰️ timeline view</button>
           <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
-          <button class="btn mini bib" id="bibAllBtn" title="Copy BibTeX entries for every paper on the map">📋 BibTeX all</button>
+          <button class="btn mini bib" id="bibAllBtn" title="Copy BibTeX entries for every paper on the map">📋 .bib</button>
         </div>
         <div id="nettable" style="display:none"></div>
         <div id="areasbox" style="display:none"></div>
@@ -334,7 +349,7 @@
 
       <section class="panel p-journey" id="journeyPanel" style="display:none">
         <div class="ptitle">🧭 RESEARCH JOURNEY</div>
-        <div class="psub" id="journeysub">What they've worked on, year by year — papers stacked by subfield.</div>
+        <div class="psub" id="journeysub">Their papers per subfield per year — read each row left to right to watch the interests shift.</div>
         <div id="journey"></div>
       </section>
     </div>
@@ -703,6 +718,7 @@ function renderTrend(w) {
       <div class="stat"><div class="v">${fmt(w.cited_by_count)}</div><div class="k">all-time</div></div>
       <div class="stat"><div class="v">${peak ? peak.year : '—'}</div><div class="k">peak year</div></div>
       <div class="stat"><div class="v">${fmt(Math.round(total / cby.length))}</div><div class="k">avg / yr shown</div></div>
+      ${w.fwci != null ? `<div class="stat" title="Field-Weighted Citation Impact: citations vs similar papers (same field, type, year). 1.0 = field average."><div class="v">${w.fwci.toFixed(1)}</div><div class="k">FWCI (1 = avg)</div></div>` : ''}
     </div>
     <div class="trend-foot"><span class="verdict">${verdict}</span></div>`;
 }
@@ -728,9 +744,8 @@ function percChip(w) {
     const spice = p.is_in_top_1_percent ? '🏆' : p.is_in_top_10_percent ? '🏅' : '📊';
     bits.push(`${spice} ${label} of its field-year`);
   }
-  if (w.fwci != null) bits.push(`${w.fwci.toFixed(1)}× field avg`);
   if (!bits.length) return '';
-  return `<span class="chip imp" title="Citation percentile vs papers of the same field, type, and publication year, plus Field-Weighted Citation Impact (1.0 = exactly the field average). The fair way to read a citation count.">${bits.join(' · ')}</span>`;
+  return `<span class="chip imp" title="Citation percentile vs papers of the same field, type, and publication year — the fair way to read a citation count. Full impact metrics live in the CITATION TREND tab.">${bits.join(' · ')}</span>`;
 }
 
 /* ---- BibTeX ---- */
@@ -788,7 +803,7 @@ async function copyAllBibtex() {
     if (!entries.length) throw new Error('no entries');
     await copyText(entries.join('\n\n'), `${entries.length} BibTeX entries copied! 📋`);
   } catch (e) { toast('BibTeX kitchen fire 🔥 — try again?'); }
-  btn.disabled = false; btn.textContent = '📋 BibTeX all';
+  btn.disabled = false; btn.textContent = '📋 .bib';
 }
 
 /* ---- sharing: permalink, toast, passport card ---- */
@@ -998,20 +1013,40 @@ async function buildCoauthors(a) {
   } catch (e) {}
   const maxV = groups[0].n;
   box.innerHTML = '';
-  const bars = el('div', 'bars');
-  bars.style.maxHeight = '430px'; bars.style.overflow = 'auto'; bars.style.paddingRight = '6px';
-  groups.forEach((g, i) => {
+  const wrap = el('div');
+  wrap.style.maxHeight = '460px'; wrap.style.overflow = 'auto'; wrap.style.paddingRight = '6px';
+  const multi = groups.filter(g => g.n > 1), single = groups.filter(g => g.n === 1);
+  const mkLink = g => {
     const e2 = enrich[g.id] || {};
     const lki = e2.last_known_institutions && e2.last_known_institutions[0];
-    const row = el('div', 'brow');
-    row.innerHTML = `
-      <span class="nm"><span class="pos">#${i + 1}</span><a href="#" data-aid="${esc(g.id)}" title="Scope this researcher">${esc(g.name || 'Unknown')}</a>${lki && lki.country_code ? ' <span class="flag">' + flag(lki.country_code) + '</span>' : ''}${e2.summary_stats && e2.summary_stats.h_index != null ? ` <span class="apill h" style="font-size:10px">h ${e2.summary_stats.h_index}</span>` : ''}</span>
-      <span class="val">${fmt(g.n)} together</span>
-      <span class="track"><span class="fill" style="width:${Math.max(3, 100 * g.n / maxV)}%"></span></span>`;
-    row.querySelector('a[data-aid]').addEventListener('click', ev => { ev.preventDefault(); scrollTo({ top: 0, behavior: 'smooth' }); loadAuthor(g.id); });
-    bars.appendChild(row);
+    const flg = lki && lki.country_code ? ' ' + flag(lki.country_code) : '';
+    const h = e2.summary_stats && e2.summary_stats.h_index != null ? ` <span class="apill h" style="font-size:10px;padding:0 6px">h ${e2.summary_stats.h_index}</span>` : '';
+    return `<a href="#" data-aid="${esc(g.id)}" title="Scope this researcher">${esc(g.name || 'Unknown')}</a>${flg}${h}`;
+  };
+  multi.forEach((g, i) => {
+    const row = el('div', 'corow');
+    row.innerHTML = `<span class="pos">#${i + 1}</span><span class="conm">${mkLink(g)}</span>
+      <span class="cobar"><span class="cofill" style="width:${Math.max(4, 100 * g.n / maxV)}%"></span></span>
+      <span class="cn">${g.n}×</span>`;
+    wrap.appendChild(row);
   });
-  box.appendChild(bars);
+  if (single.length) {
+    wrap.appendChild(el('div', 'cohead', `☝️ one-paper collaborators (${single.length})`));
+    const cloud = el('div');
+    for (const g of single) {
+      const c = el('a', 'cochip');
+      c.href = '#'; c.dataset.aid = g.id;
+      const e2 = enrich[g.id] || {};
+      const lki = e2.last_known_institutions && e2.last_known_institutions[0];
+      c.innerHTML = esc(g.name || 'Unknown') + (lki && lki.country_code ? ' ' + flag(lki.country_code) : '');
+      cloud.appendChild(c);
+    }
+    wrap.appendChild(cloud);
+  }
+  wrap.querySelectorAll('a[data-aid]').forEach(x => x.addEventListener('click', ev => {
+    ev.preventDefault(); scrollTo({ top: 0, behavior: 'smooth' }); loadAuthor(x.dataset.aid);
+  }));
+  box.appendChild(wrap);
 }
 
 /* research journey: stacked subfield areas over the years */
@@ -1032,41 +1067,39 @@ async function buildJourney(a) {
   const counts = years.map(y => { const c = {}; for (const k of series) c[k] = 0; return c; });
   for (const x of works) counts[x.publication_year - y0][grp(x)]++;
 
-  const W = Math.max(320, (box.clientWidth || 800) - 6), H = 260, PAD = 40, BOT = 30;
-  const maxTot = Math.max(...counts.map(c => series.reduce((s2, k) => s2 + c[k], 0)), 1);
-  const px = i => PAD + (years.length === 1 ? 0 : i * (W - PAD - 12) / (years.length - 1));
-  const py = v => (H - BOT) - v * (H - BOT - 16) / maxTot;
-  let paths = '';
-  const cum = counts.map(() => 0);
-  series.forEach((k, si) => {
-    const topPts = years.map((y, i) => { cum[i] += counts[i][k]; return [px(i), py(cum[i])]; });
-    const botPts = years.map((y, i) => [px(i), py(cum[i] - counts[i][k])]).reverse();
-    const d = 'M' + topPts.map(p => p.map(v => Math.round(v * 10) / 10).join(',')).join(' L') + ' L' + botPts.map(p => p.map(v => Math.round(v * 10) / 10).join(',')).join(' L') + ' Z';
-    const col = k === 'Other' ? '#8a8578' : PALETTE[si];
-    paths += `<path d="${d}" fill="${col}" fill-opacity="0.85" stroke="#141414" stroke-width="2"></path>`;
-  });
-  let axis = '';
-  const step = Math.max(1, Math.ceil(years.length / 10));
-  for (let i = 0; i < years.length; i += step) axis += `<text x="${px(i)}" y="${H - 8}" text-anchor="${i >= years.length - step ? 'end' : 'middle'}" font-size="11.5" font-weight="800" fill="#898781">${years[i]}</text>`;
-  axis += `<text x="12" y="${py(maxTot) + 4}" font-size="11" font-weight="800" fill="#898781">${maxTot}</text>`;
-  axis += `<text x="12" y="${H - BOT + 4}" font-size="11" font-weight="800" fill="#898781">0</text>`;
+  // order rows by when each subfield first appears — the journey reads top-to-bottom
+  const firstIdx = k => counts.findIndex(c => c[k] > 0);
+  const rows = series.slice().sort((p, q) => (p === 'Other') - (q === 'Other') || firstIdx(p) - firstIdx(q));
+  const maxCell = Math.max(...counts.flatMap(c => rows.map(k => c[k])), 1);
+  const RAMP = ['#cde2fb', '#9ec5f4', '#5598e7', '#2a78d6', '#184f95'];
+  const shade = v => v === 0 ? null : RAMP[maxCell === 1 ? 2 : Math.round((v - 1) / (maxCell - 1) * (RAMP.length - 1))];
+  const avail = Math.max(320, (box.clientWidth || 800) - 210);
+  const cw = Math.max(22, Math.min(42, Math.floor(avail / years.length)));
+  let grid = `<div style="display:grid;grid-template-columns:190px repeat(${years.length},${cw}px);gap:3px;align-items:center;min-width:${190 + years.length * (cw + 3)}px">`;
+  for (const k of rows) {
+    const tot = k === 'Other' ? works.length - top.reduce((s2, t) => s2 + totals[t], 0) : totals[k];
+    grid += `<div class="jlabel" title="${esc(k)} — ${fmt(tot)} papers">${esc(k)} <span style="color:#898781">(${fmt(tot)})</span></div>`;
+    years.forEach((y, i) => {
+      const v = counts[i][k];
+      const bg = shade(v);
+      grid += `<div class="jcell" data-t="${esc(k)} · ${y}: ${v} paper${v === 1 ? '' : 's'}" style="background:${bg || '#fff'};${bg ? '' : 'border-color:rgba(20,20,20,.18);'}color:${v && RAMP.indexOf(bg) >= 3 ? '#fff' : '#141414'}">${v || ''}</div>`;
+    });
+  }
+  grid += `<div></div>`;
+  const step = Math.max(1, Math.ceil(years.length / 12));
+  years.forEach((y, i) => { grid += `<div class="jyear">${i % step === 0 || i === years.length - 1 ? y : ''}</div>`; });
+  grid += `</div>`;
 
-  box.innerHTML = `<div class="trend-chart" style="position:relative">
-      <svg id="journeySvg" width="${W}" height="${H}">${paths}${axis}</svg>
+  box.innerHTML = `<div class="trend-chart" style="overflow-x:auto">${grid}</div>
+    <div class="legend" style="margin-top:12px"><span class="lg">papers/yr:</span>
+      ${RAMP.map((c, i) => `<span class="lg"><i style="background:${c}"></i>${i === 0 ? '1' : i === RAMP.length - 1 ? 'up to ' + maxCell : ''}</span>`).join('')}
     </div>
-    <div class="legend" style="margin-top:12px">${series.map((k, si) => `<span class="lg"><i style="background:${k === 'Other' ? '#8a8578' : PALETTE[si]}"></i>${esc(k)} (${fmt(k === 'Other' ? works.length - top.reduce((s2, t) => s2 + totals[t], 0) : totals[k])})</span>`).join('')}</div>
-    ${total > works.length ? `<div class="psub" style="margin-top:8px">Based on their ${works.length} most recent papers (of ${fmt(total)}).</div>` : ''}`;
-
-  // hover: nearest-year breakdown
-  const svg = $('#journeySvg');
-  svg.addEventListener('pointermove', e => {
-    const r = svg.getBoundingClientRect();
-    const i = Math.max(0, Math.min(years.length - 1, Math.round((e.clientX - r.left - PAD) / ((W - PAD - 12) / Math.max(1, years.length - 1)))));
-    const c = counts[i];
-    const rows = series.filter(k => c[k]).map(k => `${esc(k)}: ${c[k]}`).join('<br>');
-    tipShow(`<div class="tt">${years[i]}</div><div class="tm">${rows || 'no papers'}</div>`, e.clientX, e.clientY);
+    ${total > works.length ? `<div class="psub" style="margin-top:8px">Based on their ${works.length} most recent papers (of ${fmt(total)}).</div>` : ''}
+  `;
+  box.querySelectorAll('.jcell').forEach(c => {
+    c.addEventListener('pointermove', e => tipShow(`<div class="tt">${c.dataset.t}</div>`, e.clientX, e.clientY));
+    c.addEventListener('pointerleave', tipHide);
   });
-  svg.addEventListener('pointerleave', tipHide);
 }
 
 /* citing works for the author's top papers (one OR-batched query) */
