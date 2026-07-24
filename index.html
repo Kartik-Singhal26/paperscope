@@ -108,6 +108,14 @@
   .hero .authors a{text-decoration:none; color:var(--ink); border-bottom:2px solid var(--c1);}
   .hero .authors a:hover{background:var(--sky);}
   .badges{display:flex; flex-wrap:wrap; gap:10px; margin-top:16px;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:15px; align-items:center;}
+  .chip{border:2.5px solid var(--ink); padding:3px 11px; font-weight:800; font-size:12.5px; background:var(--paper); box-shadow:2px 2px 0 var(--ink); text-decoration:none; color:var(--ink);}
+  .chip.y{background:var(--peach);} .chip.c{background:var(--sky);} .chip.v{background:var(--lime);}
+  .chip.t{background:var(--lav);} .chip.oa{background:#C9F7C9;} .chip.imp{background:var(--peach);}
+  a.chip:hover{transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink);}
+  .toolbar{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; padding-top:13px; border-top:3px dashed rgba(20,20,20,.28);}
+  .tool{border:2.5px solid var(--ink); background:#fff; padding:4px 12px; font-weight:800; font-size:12.5px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); text-decoration:none; color:var(--ink); font-family:inherit;}
+  .tool:hover{transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); background:var(--sky);}
   .badge{border:3px solid var(--ink); padding:5px 12px; font-weight:800; font-size:13px; background:var(--paper); box-shadow:3px 3px 0 var(--ink);}
   .badge.y{background:var(--peach);} .badge.c{background:var(--sky);} .badge.v{background:var(--lime);}
   .badge.t{background:var(--lav);} .badge.oa{background:#C9F7C9;}
@@ -318,16 +326,16 @@
         <div class="cbars bars" id="cbars"></div>
       </section>
 
-      <section class="panel p-journey" id="journeyPanel" style="display:none">
-        <div class="ptitle">🧭 RESEARCH JOURNEY</div>
-        <div class="psub" id="journeysub">What they've worked on, year by year — papers stacked by subfield.</div>
-        <div id="journey"></div>
-      </section>
-
       <section class="panel p-authors">
         <div class="ptitle" id="crewTitle">🧑‍🔬 THE CITING CREW</div>
         <div class="psub" id="asub">The researchers who cite this paper most.</div>
         <div class="acards" id="acards"></div>
+      </section>
+
+      <section class="panel p-journey" id="journeyPanel" style="display:none">
+        <div class="ptitle">🧭 RESEARCH JOURNEY</div>
+        <div class="psub" id="journeysub">What they've worked on, year by year — papers stacked by subfield.</div>
+        <div id="journey"></div>
       </section>
     </div>
   </div>
@@ -607,12 +615,11 @@ async function enrichSemanticScholar(w) {
       j = m.data && m.data[0];
     }
     if (j && j.citationCount != null) {
-      const b = $('#s2badge');
+      const b = $('#citeChip');
       if (!b) return;
-      b.style.display = '';
-      b.title = `Semantic Scholar counts a broader corpus (incl. many preprints), so it usually sits closer to Google Scholar's number.` +
-        (j.influentialCitationCount != null ? ` ${fmt(j.influentialCitationCount)} of these are "influential" citations.` : '');
-      b.innerHTML = `📣 ${fmt(j.citationCount)} citations <small style="font-weight:700;opacity:.65">(Semantic Scholar)</small>`;
+      b.innerHTML = `📣 ${fmt(w.cited_by_count)} · <span style="opacity:.75">S2 ${fmt(j.citationCount)}</span> citations`;
+      b.title = `OpenAlex counts ${fmt(w.cited_by_count)}; Semantic Scholar counts ${fmt(j.citationCount)} (its broader corpus sits closer to Google Scholar's number).` +
+        (j.influentialCitationCount != null ? ` ${fmt(j.influentialCitationCount)} of those are "influential" citations.` : '');
     }
   } catch (e) { /* badge simply stays hidden */ }
 }
@@ -629,20 +636,22 @@ function renderHero(w) {
     <div class="sticker">UNDER THE SCOPE</div>
     <h2>${esc(w.display_name)}</h2>
     <div class="authors">${authStr || 'Author list unavailable'}</div>
-    <div class="badges">
-      <span class="badge y">📅 ${esc(w.publication_year ?? '—')}</span>
-      <span class="badge c" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows a higher number because it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations <small style="font-weight:700;opacity:.65">(OpenAlex)</small></span>
-      <span class="badge c" id="s2badge" style="display:none"></span>
-      <a class="badge gs" target="_blank" rel="noopener" href="https://scholar.google.com/scholar?q=${encodeURIComponent(w.doi ? w.doi.replace('https://doi.org/','') : '"' + w.display_name + '"')}" title="Open this paper on Google Scholar — Scholar has no API, so its count can't be shown here, but it's one click away.">🎓 Google Scholar ↗</a>
-      ${venue ? `<a class="badge v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
-      ${topic ? `<a class="badge t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
-      ${oa ? `<span class="badge oa">🔓 open access</span>` : ''}
+    <div class="meta-row">
+      <span class="chip y">📅 ${esc(w.publication_year ?? '—')}</span>
+      <span class="chip c" id="citeChip" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows more — it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations</span>
       ${percChip(w)}
-      ${w.fwci != null ? `<span class="badge v" title="Field-Weighted Citation Impact: citations relative to similar papers (same field, type, and year). 1.0 = exactly average.">⚖️ FWCI ${w.fwci.toFixed(1)} — ${w.fwci >= 1 ? w.fwci.toFixed(1) + '× field average' : 'below field average'}</span>` : ''}
-      <a class="badge share" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
-      <button class="badge share" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
-      <button class="badge share" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
-      <button class="badge share" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
+      ${oa ? `<span class="chip oa">🔓 open access</span>` : ''}
+    </div>
+    <div class="meta-row">
+      ${venue ? `<a class="chip v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
+      ${topic ? `<a class="chip t" href="${esc(w.primary_topic.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(topic)}</a>` : ''}
+    </div>
+    <div class="toolbar">
+      <a class="tool" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
+      <a class="tool" target="_blank" rel="noopener" href="https://scholar.google.com/scholar?q=${encodeURIComponent(w.doi ? w.doi.replace('https://doi.org/','') : '"' + w.display_name + '"')}" title="Open this paper on Google Scholar — Scholar has no API, so its count can't be shown here.">🎓 Scholar ↗</a>
+      <button class="tool" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
+      <button class="tool" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
+      <button class="tool" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
     </div>`;
   renderTrend(w);
   $('#shareBtn').addEventListener('click', copyPermalink);
@@ -712,11 +721,16 @@ $('#tabCoauth').addEventListener('click', () => setTab('coauth'));
 /* ---- context badges ---- */
 function percChip(w) {
   const p = w.citation_normalized_percentile;
-  if (!p || p.value == null) return '';
-  const top = Math.max(0.1, Math.round((1 - p.value) * 1000) / 10);
-  const label = p.is_in_top_1_percent ? 'top 1%' : p.is_in_top_10_percent ? `top ${Math.max(1, Math.round(top))}%` : `top ${Math.round(top)}%`;
-  const spice = p.is_in_top_1_percent ? '🏆' : p.is_in_top_10_percent ? '🏅' : '📊';
-  return `<span class="badge y" title="Citation percentile vs papers of the same field, type, and publication year — the fair way to compare citation counts.">${spice} ${label} of its field-year</span>`;
+  const bits = [];
+  if (p && p.value != null) {
+    const top = Math.max(0.1, Math.round((1 - p.value) * 1000) / 10);
+    const label = p.is_in_top_1_percent ? 'top 1%' : p.is_in_top_10_percent ? `top ${Math.max(1, Math.round(top))}%` : `top ${Math.round(top)}%`;
+    const spice = p.is_in_top_1_percent ? '🏆' : p.is_in_top_10_percent ? '🏅' : '📊';
+    bits.push(`${spice} ${label} of its field-year`);
+  }
+  if (w.fwci != null) bits.push(`${w.fwci.toFixed(1)}× field avg`);
+  if (!bits.length) return '';
+  return `<span class="chip imp" title="Citation percentile vs papers of the same field, type, and publication year, plus Field-Weighted Citation Impact (1.0 = exactly the field average). The fair way to read a citation count.">${bits.join(' · ')}</span>`;
 }
 
 /* ---- BibTeX ---- */
@@ -892,16 +906,20 @@ function renderAuthorHero(a) {
     <div class="sticker">UNDER THE SCOPE 🧑‍🔬</div>
     <h2>${esc(a.display_name)}</h2>
     <div class="authors">${inst ? `${inst.country_code ? flag(inst.country_code) + ' ' : ''}${esc(inst.display_name)}` : 'Affiliation unknown'}${since ? ` · active since ${since}` : ''}</div>
-    <div class="badges">
-      <span class="badge c">📣 ${fmt(a.cited_by_count)} citations</span>
-      <span class="badge y">📚 ${fmt(a.works_count)} papers</span>
-      <span class="badge v">💪 h-index ${stats.h_index ?? '—'}</span>
-      ${stats.i10_index != null ? `<span class="badge t">🔟 i10 ${fmt(stats.i10_index)}</span>` : ''}
-      ${topTopics.map(t => `<a class="badge t" href="${esc(t.id)}" target="_blank" rel="noopener">🧠 ${esc(t.display_name)}</a>`).join('')}
-      ${a.orcid ? `<a class="badge oa" href="${esc(a.orcid)}" target="_blank" rel="noopener" title="Verified ORCID profile">🪪 ORCID ↗</a>` : ''}
-      <a class="badge share" href="${esc(a.id)}" target="_blank" rel="noopener" title="Open on OpenAlex">📄 OpenAlex ↗</a>
-      <button class="badge share" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
-      <button class="badge share" id="passportBtn" title="Download a citation-passport card">🛂 passport</button>
+    <div class="meta-row">
+      <span class="chip c">📣 ${fmt(a.cited_by_count)} citations</span>
+      <span class="chip y">📚 ${fmt(a.works_count)} papers</span>
+      <span class="chip v">💪 h-index ${stats.h_index ?? '—'}</span>
+      ${stats.i10_index != null ? `<span class="chip t">🔟 i10 ${fmt(stats.i10_index)}</span>` : ''}
+    </div>
+    <div class="meta-row">
+      ${topTopics.map(t => `<a class="chip t" href="${esc(t.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">🧠 ${esc(t.display_name)}</a>`).join('')}
+    </div>
+    <div class="toolbar">
+      ${a.orcid ? `<a class="tool" href="${esc(a.orcid)}" target="_blank" rel="noopener" title="Verified ORCID profile">🪪 ORCID ↗</a>` : ''}
+      <a class="tool" href="${esc(a.id)}" target="_blank" rel="noopener" title="Open on OpenAlex">📄 OpenAlex ↗</a>
+      <button class="tool" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
+      <button class="tool" id="passportBtn" title="Download a citation-passport card">🛂 passport</button>
     </div>`;
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
@@ -960,15 +978,17 @@ async function buildPortfolio(a, worksP) {
 async function buildCoauthors(a) {
   const selfId = idTail(a.id);
   const j = await getJSON(`${API}/works?filter=authorships.author.id:${selfId}&group_by=authorships.author.id`);
-  const groups = (j.group_by || [])
+  const raw = (j.group_by || [])
     .map(g => ({ id: idTail(g.key || ''), name: g.key_display_name, n: g.count }))
-    .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id))
-    .slice(0, 8);
+    .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id));
+  const groups = raw.sort((x, y) => y.n - x.n); // every collaborator, ranked
   const box = $('#coauth');
   if (!groups.length) { box.innerHTML = '<div class="empty">🐺 A lone wolf — no co-authors on record.</div>'; return; }
+  document.querySelector('#coauthTab .psub').textContent =
+    `All ${groups.length}${(j.group_by || []).length >= 200 ? '+' : ''} people they've published with, ranked by shared papers. Click a name to scope them.`;
   let enrich = {};
   try {
-    const f = groups.map(g => g.id).join('|');
+    const f = groups.slice(0, 50).map(g => g.id).join('|');
     const sel = 'id,display_name,summary_stats,last_known_institutions';
     const jj = await getJSONChain([
       `${API}/authors?filter=ids.openalex:${f}&per-page=25&select=${sel}`,
@@ -979,6 +999,7 @@ async function buildCoauthors(a) {
   const maxV = groups[0].n;
   box.innerHTML = '';
   const bars = el('div', 'bars');
+  bars.style.maxHeight = '430px'; bars.style.overflow = 'auto'; bars.style.paddingRight = '6px';
   groups.forEach((g, i) => {
     const e2 = enrich[g.id] || {};
     const lki = e2.last_known_institutions && e2.last_known_institutions[0];
