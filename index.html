@@ -105,6 +105,8 @@
   .hero h2 a{text-decoration:none;}
   .hero h2 a:hover{background:var(--lime); box-shadow:0 0 0 3px var(--lime);}
   .hero .authors{margin-top:10px; font-weight:700; color:var(--muted); font-size:14.5px; line-height:1.5;}
+  .hero .authors a{text-decoration:none; color:var(--ink); border-bottom:2px solid var(--c1);}
+  .hero .authors a:hover{background:var(--sky);}
   .badges{display:flex; flex-wrap:wrap; gap:10px; margin-top:16px;}
   .badge{border:3px solid var(--ink); padding:5px 12px; font-weight:800; font-size:13px; background:var(--paper); box-shadow:3px 3px 0 var(--ink);}
   .badge.y{background:var(--peach);} .badge.c{background:var(--sky);} .badge.v{background:var(--lime);}
@@ -156,6 +158,9 @@
   .btn.tbl .arr{display:inline-block; transition:transform .15s; font-size:15px;}
   .btn.tbl.open .arr{transform:rotate(90deg);}
   #nettable{margin-top:14px; border:3px solid var(--ink); background:#fff; max-height:340px; overflow:auto;}
+  #areasbox{margin-top:14px; border:3px solid var(--ink); background:#fff; padding:14px; box-shadow:var(--bs-sm);}
+  .btn.mini.areas{background:var(--peach); color:var(--ink);}
+  .btn.mini.areas.on{background:var(--lime);}
   .ntrow{display:grid; grid-template-columns:34px minmax(0,1fr) 88px; gap:8px; align-items:center; padding:9px 12px; border-bottom:2.5px solid var(--ink); font-size:12.5px; font-weight:700; text-decoration:none; color:inherit;}
   .ntrow:last-child{border-bottom:none;}
   .ntrow:hover{background:var(--sky);}
@@ -281,6 +286,7 @@
           <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
         </div>
         <div id="nettable" style="display:none"></div>
+        <div id="areasbox" style="display:none"></div>
       </section>
 
       <section class="panel p-journal">
@@ -315,6 +321,7 @@
 
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
+    <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
   </footer>
 </div>
 <div id="tip"></div>
@@ -595,15 +602,17 @@ async function enrichSemanticScholar(w) {
 }
 
 function renderHero(w) {
-  const auths = (w.authorships || []).map(a => a.author && a.author.display_name).filter(Boolean);
-  const authStr = auths.length > 8 ? auths.slice(0, 8).join(', ') + ' + ' + (auths.length - 8) + ' more' : auths.join(', ');
+  const auths = (w.authorships || []).map(a => a.author).filter(a => a && a.display_name);
+  const authStr = auths.slice(0, 8).map(a => a.id
+    ? `<a href="#" class="au" data-aid="${esc(idTail(a.id))}" title="Scope this author — their whole citation story">${esc(a.display_name)}</a>`
+    : esc(a.display_name)).join(', ') + (auths.length > 8 ? ' + ' + (auths.length - 8) + ' more' : '');
   const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
   const topic = w.primary_topic && w.primary_topic.display_name;
   const oa = w.open_access && w.open_access.is_oa;
   $('#hero').innerHTML = `
     <div class="sticker">UNDER THE SCOPE</div>
     <h2>${esc(w.display_name)}</h2>
-    <div class="authors">${esc(authStr || 'Author list unavailable')}</div>
+    <div class="authors">${authStr || 'Author list unavailable'}</div>
     <div class="badges">
       <span class="badge y">📅 ${esc(w.publication_year ?? '—')}</span>
       <span class="badge c" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows a higher number because it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations <small style="font-weight:700;opacity:.65">(OpenAlex)</small></span>
@@ -619,6 +628,11 @@ function renderHero(w) {
   renderTrend(w);
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
+  document.querySelectorAll('#hero a.au').forEach(a => a.addEventListener('click', ev => {
+    ev.preventDefault();
+    scrollTo({ top: 0, behavior: 'smooth' });
+    loadAuthor(a.dataset.aid);
+  }));
 }
 
 /* ---- citation trend tab: big yearly chart + verdict ---- */
@@ -826,7 +840,8 @@ async function buildPortfolio(a, worksP) {
   $('#netctl').style.display = 'none';
   $('#nettable').style.display = 'none'; $('#nettable').innerHTML = '';
   const tb = $('#tableBtn'); tb.classList.remove('open'); tb.innerHTML = '<span class="arr">▸</span> greatest hits table';
-  const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🪄 More of their papers';
+  const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🧠 areas of interest'; mb.classList.add('areas'); mb.classList.remove('on');
+  $('#areasbox').style.display = 'none'; $('#areasbox').innerHTML = '';
   const tmb = $('#timeBtn'); tmb.classList.remove('on'); tmb.textContent = '🕰️ career timeline';
 
   const years = works.map(x => x.publication_year).filter(Boolean);
@@ -839,7 +854,7 @@ async function buildPortfolio(a, worksP) {
     if (seen.has(id)) continue; seen.add(id);
     nodes.push({ w: r, kind: 'their paper', close: Math.round(100 * (r.cited_by_count || 0) / maxC) });
   }
-  NET = { w: pseudo, nodes, seen, topicId: null, authorId: idTail(a.id), workPage: 1, topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null, mode: 'force', edges: [] };
+  NET = { w: pseudo, nodes, seen, topicId: null, authorId: idTail(a.id), authorTopics: (a.topics || []).slice(0, 10), workPage: 1, topicPage: 1, shown: [], isolated: null, tableOpen: false, areasOpen: false, raf: null, mode: 'force', edges: [] };
   computeEdges(); // their papers citing their papers
   refreshFields();
   renderNetLegend();
@@ -999,7 +1014,8 @@ async function buildNetwork(w) {
   $('#netctl').style.display = 'none';
   $('#nettable').style.display = 'none'; $('#nettable').innerHTML = '';
   const tb = $('#tableBtn'); tb.classList.remove('open'); tb.innerHTML = '<span class="arr">▸</span> closeness table';
-  const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🪄 Spawn more papers';
+  const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🪄 Spawn more papers'; mb.classList.remove('areas', 'on');
+  $('#areasbox').style.display = 'none'; $('#areasbox').innerHTML = '';
   const tmb = $('#timeBtn'); tmb.classList.remove('on'); tmb.textContent = '🕰️ timeline view';
 
   const relIds = (w.related_works || []).map(idTail).filter(Boolean).slice(0, 12);
@@ -1064,7 +1080,9 @@ function computeEdges() {
 
 /* Timeline layout targets: x = publication year, y = citations (sqrt scale) */
 function computeTimeTargets() {
-  const ns = NET.nodes, W = NET.W, H = NET.H;
+  const hideCenter = !!NET.authorId; // the researcher star is not a paper — park it offscreen
+  const ns = NET.nodes.filter(n => !(n.center && hideCenter)), W = NET.W, H = NET.H;
+  if (hideCenter) { const c = NET.nodes[0]; c.tx = -200; c.ty = -200; }
   const years = ns.map(n => n.w.publication_year).filter(Boolean);
   const y0 = Math.min(...years), y1 = Math.max(...years);
   const span = Math.max(1, y1 - y0);
@@ -1106,7 +1124,7 @@ function renderNetLegend() {
 
 async function spawnMore() {
   const mb = $('#moreBtn');
-  if (NET && NET.authorId) return spawnMoreAuthorWorks();
+  if (NET && NET.authorId) return toggleAreas();
   if (!NET || !NET.topicId) { mb.disabled = true; mb.textContent = '🤷 No topic to mine'; return; }
   mb.disabled = true; mb.textContent = '✨ conjuring…';
   try {
@@ -1140,36 +1158,24 @@ async function spawnMore() {
   }
 }
 
-async function spawnMoreAuthorWorks() {
-  const mb = $('#moreBtn');
-  mb.disabled = true; mb.textContent = '✨ conjuring…';
-  try {
-    NET.workPage++;
-    const j = await getJSON(`${API}/works?filter=authorships.author.id:${NET.authorId}&sort=cited_by_count:desc&per-page=25&page=${NET.workPage}&select=${AWORK_SEL}`);
-    let added = 0;
-    for (const r of (j.results || [])) {
-      if (NET.nodes.length >= NET_CAP) break;
-      const id = idTail(r.id);
-      if (NET.seen.has(id)) continue; NET.seen.add(id);
-      const n = { w: r, kind: 'their paper', fresh: 60 };
-      const side = Math.floor(Math.random() * 4);
-      n.x = side === 0 ? 10 : side === 1 ? NET.W - 10 : Math.random() * NET.W;
-      n.y = side === 2 ? 10 : side === 3 ? NET.H - 10 : Math.random() * NET.H;
-      n.vx = 0; n.vy = 0; n.r = 10;
-      NET.nodes.push(n); added++;
-    }
-    const maxC = Math.max(...NET.nodes.filter(n => !n.center).map(n => n.w.cited_by_count || 1));
-    for (const n of NET.nodes) if (!n.center) n.close = Math.round(100 * (n.w.cited_by_count || 0) / maxC);
-    resizeNodes();
-    computeEdges();
-    if (NET.mode === 'time') computeTimeTargets();
-    refreshFields();
-    renderNetLegend();
-    if (NET.tableOpen) renderNetTable();
-    if (NET.nodes.length >= NET_CAP) { mb.disabled = true; mb.textContent = '🎒 Map is full! (60 papers)'; }
-    else if (!added) { mb.disabled = true; mb.textContent = '🥲 That’s the whole shelf'; }
-    else { mb.disabled = false; mb.textContent = '🪄 More of their papers'; }
-  } catch (e) { mb.disabled = false; mb.textContent = '🪄 More of their papers (retry?)'; }
+function toggleAreas() {
+  const mb = $('#moreBtn'), box = $('#areasbox');
+  NET.areasOpen = !NET.areasOpen;
+  mb.classList.toggle('on', NET.areasOpen);
+  if (!NET.areasOpen) { box.style.display = 'none'; return; }
+  const topics = NET.authorTopics || [];
+  if (!topics.length) { box.innerHTML = '<div class="empty">🤷 No research areas on record.</div>'; box.style.display = ''; return; }
+  const maxV = topics[0].count || 1;
+  let html = '<div class="psub" style="margin-bottom:10px">What they actually work on — topics across their papers, by paper count.</div><div class="bars">';
+  topics.forEach((t, i) => {
+    html += `<div class="brow">
+      <span class="nm"><span class="pos">#${i + 1}</span><a href="${esc(t.id)}" target="_blank" rel="noopener" title="Open this topic on OpenAlex">${esc(t.display_name)}</a></span>
+      <span class="val">${fmt(t.count)} papers</span>
+      <span class="track"><span class="fill" style="width:${Math.max(3, 100 * (t.count || 0) / maxV)}%"></span></span>
+    </div>`;
+  });
+  box.innerHTML = html + '</div>';
+  box.style.display = '';
 }
 
 function resizeNodes() {
@@ -1223,7 +1229,7 @@ $('#tableBtn').addEventListener('click', () => {
   NET.tableOpen = !NET.tableOpen;
   const tb = $('#tableBtn'), box = $('#nettable');
   tb.classList.toggle('open', NET.tableOpen);
-  tb.innerHTML = `<span class="arr">▸</span> closeness table`;
+  tb.innerHTML = `<span class="arr">▸</span> ${NET.authorId ? 'greatest hits table' : 'closeness table'}`;
   if (NET.tableOpen) { renderNetTable(); box.style.display = ''; }
   else box.style.display = 'none';
 });
@@ -1331,6 +1337,7 @@ function drawNetwork() {
       ctx.beginPath(); ctx.moveTo(e.a.x, e.a.y); ctx.lineTo(e.b.x, e.b.y); ctx.stroke();
     }
     for (const n of nodes) {
+      if (n.center && NET.mode === 'time' && NET.authorId) continue;
       const dim = dimmed(n);
       ctx.globalAlpha = dim ? 0.15 : 1;
       ctx.beginPath(); ctx.arc(n.x + 3, n.y + 3, n.r, 0, 7); ctx.fillStyle = 'rgba(20,20,20,.9)'; ctx.fill();
@@ -1347,7 +1354,7 @@ function drawNetwork() {
   loop();
 
   const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const hit = p => nodes.find(n => !dimmed(n) && Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 4);
+  const hit = p => nodes.find(n => !dimmed(n) && !(n.center && NET.mode === 'time' && NET.authorId) && Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 4);
   cv.addEventListener('pointermove', e => {
     const p = pos(e);
     if (dragging) { dragging.x = p.x; dragging.y = p.y; dragging.vx = dragging.vy = 0; return; }
