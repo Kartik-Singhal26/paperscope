@@ -507,7 +507,7 @@
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
     <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
-    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.0.2 · 2026-07-26 · build c0cf4ac5</a></span>
+    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.0.3 · 2026-07-26 · build a7ef1682</a></span>
   </footer>
 </div>
 <div id="tip"></div>
@@ -526,6 +526,10 @@ const idTail = url => String(url || '').split('/').pop();
 const flag = cc => cc && /^[A-Za-z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
 const PALETTE = ['#3A86FF','#FB5607','#068F6C','#C98A00','#E4569B','#7B2FBF'];
 const API = 'https://api.openalex.org';
+const BASE_TITLE = 'PaperScope 🔭 — feed it a paper, get the whole story';
+function setTitle(t) {
+  document.title = t ? `${String(t).slice(0, 70)} — PaperScope 🔭` : BASE_TITLE;
+}
 window.IS_TOUCH = matchMedia('(pointer: coarse)').matches; // tap-once-preview, tap-twice-act on canvases
 let touchTipT = null;
 function touchTip(html, x, y) {
@@ -782,6 +786,7 @@ async function loadPaper(idOrDoi) {
     setModeTexts('paper');
     setMode('paper');
     renderHero(w);
+    setTitle(w.display_name);
     setPermalink(w);
     RESIZERS.delete('journey');
     enrichSemanticScholar(w, ep); // best-effort second opinion on citations
@@ -1075,6 +1080,7 @@ async function loadAuthor(idOrOrcid) {
     setMode('author');
     setModeTexts('author');
     renderAuthorHero(a, ep);
+    setTitle(a.display_name);
     setAuthorPermalink(a);
     $('#results').className = 'on';
     setTab('rank');
@@ -1874,6 +1880,7 @@ function goHome() {
     u.searchParams.delete('w'); u.searchParams.delete('a'); u.searchParams.delete('vs');
     history.replaceState(null, '', u);
   } catch (e) {}
+  setTitle(null);
   loadTrending();                // cached after first visit — instant
   scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2511,6 +2518,7 @@ async function buildCompare() {
       u.searchParams.set('vs', `${VS.aId}.${VS.bId}`);
       history.replaceState(null, '', u);
     } catch (e) {}
+    setTitle(`${(A.display_name || '').slice(0, 30)} vs ${(B.display_name || '').slice(0, 30)}`);
     renderVsHeroes(A, B);
     renderVsTape(A, B);
     renderVsTrend(A, B);

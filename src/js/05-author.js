@@ -15,6 +15,7 @@ async function loadAuthor(idOrOrcid) {
     setMode('author');
     setModeTexts('author');
     renderAuthorHero(a, ep);
+    setTitle(a.display_name);
     setAuthorPermalink(a);
     $('#results').className = 'on';
     setTab('rank');
