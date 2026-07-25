@@ -23,7 +23,7 @@ Open `index.html` in a browser. That's it — no build, no server, no API keys. 
 
 ## Host it
 
-It's a static file: drop it on Netlify Drop, GitHub Pages, Vercel, or Cloudflare Pages as `index.html`.
+It's a static file: drop it on Netlify Drop, GitHub Pages, or Cloudflare Pages as `index.html`.
 
 ## Code structure & building
 
