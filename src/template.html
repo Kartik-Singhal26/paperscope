@@ -49,6 +49,10 @@
         <div class="psub" id="netsub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = subfield. Drag nodes! Click one to scope that paper.</div>
         <div id="netbox"></div>
         <div class="legend" id="netlegend"></div>
+        <div class="seedwrap" id="seedwrap" style="display:none">
+          <input id="seedInput" type="text" autocomplete="off" spellcheck="false" placeholder="➕ add another seed paper to blend maps (up to 3)…" aria-label="Add another seed paper">
+          <div class="suggest" id="seedSug"></div>
+        </div>
         <div class="netctl" id="netctl" style="display:none">
           <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
           <button class="btn mini time" id="timeBtn">🕰️ timeline view</button>
@@ -64,6 +68,7 @@
           <button class="ptab on" id="tabRank">🏆 JOURNAL RANK</button>
           <button class="ptab" id="tabTrend">📈 CITATION TREND</button>
           <button class="ptab" id="tabCoauth" style="display:none">🤝 CO-AUTHORS</button>
+          <button class="ptab" id="tabWhere" style="display:none">🎯 WHERE NEXT</button>
         </div>
         <div id="rankTab">
           <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
@@ -76,6 +81,10 @@
         <div id="coauthTab" style="display:none">
           <div class="psub">Their most frequent partners in crime, by shared papers. Click a name to scope them.</div>
           <div id="coauth"></div>
+        </div>
+        <div id="whereTab" style="display:none">
+          <div class="psub">Where to submit next — venues in their topics, ranked by impact × topic fit, with a nod to familiar turf. A hint list, not a promise.</div>
+          <div id="wherenext"></div>
         </div>
       </section>
 

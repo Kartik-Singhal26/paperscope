@@ -17,6 +17,8 @@ $('#modePaper') && document.addEventListener('DOMContentLoaded', () => {});
 /* panel headlines per mode */
 function setModeTexts(m) {
   $('#tabCoauth').style.display = m === 'author' ? '' : 'none';
+  $('#tabWhere').style.display = m === 'author' ? '' : 'none';
+  if (m !== 'author' && $('#tabWhere').classList.contains('on')) setTab('rank');
   $('#journeyPanel').style.display = m === 'author' ? '' : 'none';
   if (m !== 'author' && $('#coauthTab').style.display !== 'none' && $('#tabCoauth').classList.contains('on')) setTab('rank');
   if (m === 'author') {
