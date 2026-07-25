@@ -322,6 +322,26 @@ function renderNetTable() {
   });
 }
 
+/* logo click: back to the landing page, everything reset */
+function goHome() {
+  EPOCH++;                       // cancel anything in flight
+  if (NET && NET.raf) { cancelAnimationFrame(NET.raf); NET.raf = null; NET.idle = true; }
+  clearStatus();
+  setMode('paper');
+  setModeTexts('paper');
+  $('#results').className = '';
+  $('#vsresults').style.display = 'none';
+  qInput.value = '';
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete('w'); u.searchParams.delete('a'); u.searchParams.delete('vs');
+    history.replaceState(null, '', u);
+  } catch (e) {}
+  loadTrending();                // cached after first visit — instant
+  scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('#homeBtn').addEventListener('click', goHome);
+
 /* landing page: a taste of what the machine can do */
 async function loadTrending() {
   try {

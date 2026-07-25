@@ -25,7 +25,7 @@ Open `index.html` in a browser. That's it — no build, no server, no API keys. 
 
 ## Host it
 
-It's a static file: drop it on Netlify Drop, GitHub Pages, or Cloudflare Pages as `index.html`.
+Live at **[paperscope.net](https://paperscope.net)** (Cloudflare Pages, auto-deploys from `main`). It's a static file — any static host serves it as `index.html`.
 
 ## Code structure & building
 
@@ -39,7 +39,7 @@ src/js/01-core.js   helpers, API client (cache + 429 retry), epoch guards, resiz
 src/js/02-mode.js … 10-crew.js   one module per feature area (see build.js MANIFEST)
 ```
 
-Edit files in `src/`, then `npm run build` (plain Node, zero dependencies) to regenerate `index.html`. The build is a deterministic concatenation — module order is the `MANIFEST` in `build.js`, and modules share one script scope, so declarations are global across files.
+Edit files in `src/`, then `npm run build` (plain Node, zero dependencies) to regenerate `index.html`. The build also emits `dist/` (app + OG image only), which is what Cloudflare deploys (`wrangler.jsonc` points assets there — never the repo root, which would drag `node_modules` along). The build is a deterministic concatenation — module order is the `MANIFEST` in `build.js`, and modules share one script scope, so declarations are global across files.
 
 ## Dev notes
 
