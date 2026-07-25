@@ -13,7 +13,7 @@ async function loadAuthor(idOrOrcid) {
     $('#trendingWrap').style.display = 'none';
     setMode('author');
     setModeTexts('author');
-    renderAuthorHero(a);
+    renderAuthorHero(a, ep);
     setAuthorPermalink(a);
     $('#results').className = 'on';
     setTab('rank');
@@ -34,6 +34,8 @@ async function loadAuthor(idOrOrcid) {
     $('#coauth').innerHTML = miniLoad('rounding up the partners…');
     $('#journey').innerHTML = miniLoad('tracing the journey…');
     panelSafe(buildCoauthors(a, ep), '#coauth', 'Co-author list unavailable');
+    $('#wherenext').innerHTML = miniLoad('scouting the venues…');
+    panelSafe(buildWhereNext(a, ep), '#wherenext', 'The scout came back empty-handed');
     panelSafe(buildJourney(a, ep), '#journey', 'The trail went cold');
     const citersP = fetchAuthorCiters(a, worksP);
     panelSafe(buildAuthorCountries(a, citersP, ep), '#mapbox', 'The globe jammed');
@@ -52,7 +54,7 @@ function setAuthorPermalink(a) {
   } catch (e) {}
 }
 
-function renderAuthorHero(a) {
+function renderAuthorHero(a, ep) {
   const inst = a.last_known_institutions && a.last_known_institutions[0];
   const stats = a.summary_stats || {};
   const years = (a.affiliations || []).flatMap(af => af.years || []);
@@ -79,6 +81,76 @@ function renderAuthorHero(a) {
     </div>`;
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
+  if (a.orcid) enrichORCID(a, ep);
+}
+
+/* ---- ORCID extras: employment + funding from the public registry (best-effort) ---- */
+async function enrichORCID(a, ep) {
+  try {
+    const oid = a.orcid.replace(/^https?:\/\/orcid\.org\//i, '');
+    const r = await fetch(`https://pub.orcid.org/v3.0/${encodeURIComponent(oid)}/record`, { headers: { Accept: 'application/json' } });
+    if (!r.ok) return;
+    const rec = await r.json();
+    if (stale(ep)) return;
+    const chips = [];
+    const groups = (((rec['activities-summary'] || {}).employments || {})['affiliation-group']) || [];
+    const jobs = groups.flatMap(g => (g.summaries || []).map(x => x['employment-summary']).filter(Boolean));
+    for (const j of jobs.slice(0, 3)) {
+      const org = j.organization && j.organization.name;
+      if (!org) continue;
+      const y0 = j['start-date'] && j['start-date'].year && j['start-date'].year.value;
+      const y1 = j['end-date'] && j['end-date'].year && j['end-date'].year.value;
+      const role = j['role-title'] ? esc(j['role-title']) + ' · ' : '';
+      chips.push(`<span class="oxchip" title="From their ORCID record">🏢 ${role}${esc(org)}${y0 ? ` (${y0}–${y1 || 'now'})` : ''}</span>`);
+    }
+    const fundGroups = (((rec['activities-summary'] || {}).fundings || {}).group) || [];
+    if (fundGroups.length) chips.push(`<span class="oxchip fund" title="Funded projects on their ORCID record">💰 ${fundGroups.length} funded project${fundGroups.length === 1 ? '' : 's'}</span>`);
+    if (!chips.length) return;
+    const hero = $('#hero');
+    if (!hero || !hero.textContent.includes(a.display_name)) return;
+    const div = el('div', 'orcid-extras', `<span class="oxhead">via ORCID 🪪</span>` + chips.join(''));
+    hero.appendChild(div);
+  } catch (e) { /* registry unreachable — hero stays as-is */ }
+}
+
+/* ---- where next: venues in their topics, impact x fit, home-turf bonus ---- */
+async function buildWhereNext(a, ep) {
+  const topics = (a.topics || []).slice(0, 3);
+  const box = $('#wherenext');
+  if (!topics.length) { box.innerHTML = '<div class="empty">🤷 No topics on record to scout venues for.</div>'; return; }
+  const maxT = topics[0].count || 1;
+  const lists = await Promise.all(topics.map(t =>
+    getJSON(`${API}/sources?filter=topics.id:${idTail(t.id)}&sort=summary_stats.2yr_mean_citedness:desc&per-page=15&select=id,display_name,summary_stats,type`)
+      .then(j => (j.results || []).map(srcx => ({ srcx, t }))).catch(() => [])));
+  // home turf: where they already publish (same group_by the venues tab uses — cached, so free)
+  let home = {};
+  try {
+    const hj = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&group_by=primary_location.source.id`);
+    for (const g of (hj.group_by || [])) if (g.key && g.key !== 'unknown') home[idTail(g.key)] = g.count;
+  } catch (e) {}
+  if (stale(ep)) return;
+  const best = new Map();
+  for (const { srcx, t } of lists.flat()) {
+    if (srcx.type && !['journal', 'conference'].includes(srcx.type)) continue;
+    const sid = idTail(srcx.id);
+    const imp = (srcx.summary_stats && srcx.summary_stats['2yr_mean_citedness']) || 0;
+    const fit = (t.count || 1) / maxT;
+    const score = Math.log(1 + imp) * (0.5 + 0.5 * fit) * (home[sid] ? 1.25 : 1);
+    const prev = best.get(sid);
+    if (!prev || score > prev.score) best.set(sid, { srcx, t, imp, score, homeN: home[sid] || 0 });
+  }
+  const rows = [...best.values()].sort((x, y) => y.score - x.score).slice(0, 10);
+  if (!rows.length) { box.innerHTML = '<div class="empty">🌵 No journal-shaped venues found in their topics.</div>'; return; }
+  box.innerHTML = rows.map((rw, i) => `
+    <div class="wrow">
+      <span class="pos">#${i + 1}</span>
+      <span class="wn"><a href="${esc(rw.srcx.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">${esc(rw.srcx.display_name)}</a></span>
+      <span class="wchips">
+        <span class="wchip">🧠 ${esc(rw.t.display_name)}</span>
+        <span class="wchip imp">⚡ ${rw.imp.toFixed(1)} avg cites</span>
+        ${rw.homeN ? `<span class="wchip home">🏠 you've published here ×${rw.homeN}</span>` : ''}
+      </span>
+    </div>`).join('');
 }
 
 /* right panel, rank tab: where they publish most */
@@ -107,6 +179,7 @@ async function buildPortfolio(a, worksP, ep) {
   if (!works.length) { $('#netbox').innerHTML = '<div class="empty">🕳️ No papers on record. A ghost!</div>'; return; }
   if (NET && NET.raf) cancelAnimationFrame(NET.raf);
   $('#netctl').style.display = 'none';
+  $('#seedwrap').style.display = 'none';
   $('#nettable').style.display = 'none'; $('#nettable').innerHTML = '';
   const tb = $('#tableBtn'); tb.classList.remove('open'); tb.innerHTML = '<span class="arr">▸</span> greatest hits table';
   const mb = $('#moreBtn'); mb.disabled = false; mb.textContent = '🧠 areas of interest'; mb.classList.add('areas'); mb.classList.remove('on');

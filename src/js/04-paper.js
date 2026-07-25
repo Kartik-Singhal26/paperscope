@@ -152,7 +152,7 @@ function renderTrend(w) {
 
 /* tab switching */
 function setTab(which) {
-  for (const [btn, box, key] of [['#tabRank', '#rankTab', 'rank'], ['#tabTrend', '#trendTab', 'trend'], ['#tabCoauth', '#coauthTab', 'coauth']]) {
+  for (const [btn, box, key] of [['#tabRank', '#rankTab', 'rank'], ['#tabTrend', '#trendTab', 'trend'], ['#tabCoauth', '#coauthTab', 'coauth'], ['#tabWhere', '#whereTab', 'where']]) {
     $(btn).classList.toggle('on', which === key);
     $(box).style.display = which === key ? '' : 'none';
   }
@@ -160,6 +160,7 @@ function setTab(which) {
 $('#tabRank').addEventListener('click', () => setTab('rank'));
 $('#tabTrend').addEventListener('click', () => setTab('trend'));
 $('#tabCoauth').addEventListener('click', () => setTab('coauth'));
+$('#tabWhere').addEventListener('click', () => setTab('where'));
 
 /* ---- context badges ---- */
 function percChip(w) {

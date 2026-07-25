@@ -70,6 +70,23 @@ const autoc = { results: [
   { id: 'https://openalex.org/W123', display_name: 'Attention in psychology', hint: 'Someone Else, 1990', cited_by_count: 500 },
 ] };
 
+const SEED2 = {
+  ...work('W777', 'Second seed: adaptive control of quadrotors', 2019, 900, 'Engineering', 'Quadrotor Control'),
+  primary_topic: { id: 'https://openalex.org/T222', display_name: 'Quadrotor Control', subfield: { display_name: 'Aerospace Engineering' }, field: { display_name: 'Engineering' } },
+  authorships: [], topics: [], concepts: [],
+  related_works: ['https://openalex.org/W770', 'https://openalex.org/W771'],
+  referenced_works: ['https://openalex.org/W900'],
+  counts_by_year: [], open_access: {},
+};
+const seed2Orbit = { results: [
+  { ...work('W770', 'Quadrotor neighbor A', 2018, 300, 'Engineering'), referenced_works: [] },
+  { ...work('W771', 'Quadrotor neighbor B', 2020, 200, 'Engineering'), referenced_works: ['https://openalex.org/W777'] },
+], meta: { count: 2 } };
+const whereVenues = { results: [
+  { id: 'https://openalex.org/S1', display_name: 'Journal of the Franklin Institute', type: 'journal', summary_stats: { '2yr_mean_citedness': 4.2 } },
+  { id: 'https://openalex.org/S9', display_name: 'IEEE Transactions on Robotics', type: 'journal', summary_stats: { '2yr_mean_citedness': 9.1 } },
+  { id: 'https://openalex.org/S10', display_name: 'Some Repository', type: 'repository', summary_stats: { '2yr_mean_citedness': 99 } },
+], meta: { count: 3 } };
 const AUTHOR = {
   id: 'https://openalex.org/A5023888391', display_name: 'Kartik Singhal', orcid: 'https://orcid.org/0000-0002-1825-0097',
   works_count: 42, cited_by_count: 1234, summary_stats: { h_index: 18, i10_index: 25 },
@@ -103,6 +120,13 @@ function routeFor(url) {
     if (u.includes('filter=ids.openalex:W90')) return null;
     if (u.includes('/authors?filter=ids.openalex:')) return null;
   }
+  if (u.match(/\/works\/W777\?/)) return SEED2;
+  if (u.includes('filter=ids.openalex:W770|W771') || u.includes('filter=openalex_id:W770|W771')) return seed2Orbit;
+  if (u.includes('filter=primary_topic.id:T222')) return { results: [], meta: { count: 0 } };
+  if (u.includes('/sources?filter=topics.id:T111') || u.includes('/sources?filter=topics.id:T112')) return whereVenues;
+  if (u.includes('/autocomplete/works') && u.includes('quadrotor')) return { results: [
+    { id: 'https://openalex.org/W777', display_name: 'Second seed: adaptive control of quadrotors', hint: 'Someone, 2019', cited_by_count: 900 },
+  ] };
   if (u.includes('/autocomplete/works')) return autoc;
   if (u.includes('/autocomplete/authors')) return { results: [{ id: AUTHOR.id, display_name: AUTHOR.display_name, hint: 'IIT Bombay', cited_by_count: 1234 }] };
   if (u.match(/\/authors\/A\d+\?/) || u.match(/\/authors\/https:\/\/orcid\.org/)) return AUTHOR;
@@ -151,7 +175,7 @@ let srcDetail429 = 0;
   const page = await ctxB.newPage();
   const errors = [];
   page.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('429')) errors.push(m.type() + ': ' + m.text()); });
-  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+  page.on('pageerror', e => { errors.push('PAGEERROR: ' + e.message); console.error('LIVE PAGEERROR:', e.message); });
 
   await page.route('**/api.openalex.org/**', async route => {
     const u0 = decodeURIComponent(route.request().url());
@@ -162,6 +186,18 @@ let srcDetail429 = 0;
     const fx = routeFor(route.request().url());
     if (fx) await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(fx) });
     else await route.fulfill({ status: 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: 'not found' }) });
+  });
+
+  await page.route('**/pub.orcid.org/**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({
+      'activities-summary': {
+        employments: { 'affiliation-group': [
+          { summaries: [{ 'employment-summary': { organization: { name: 'IIT Bombay' }, 'role-title': 'Research Scholar', 'start-date': { year: { value: '2021' } }, 'end-date': null } }] },
+          { summaries: [{ 'employment-summary': { organization: { name: 'NSUT Delhi' }, 'start-date': { year: { value: '2017' } }, 'end-date': { year: { value: '2021' } } } }] },
+        ] },
+        fundings: { group: [{}, {}] },
+      },
+    }) });
   });
 
   await page.route('**/api.semanticscholar.org/**', async route => {
@@ -270,6 +306,23 @@ let srcDetail429 = 0;
   checks.inAppPermalink = await page.evaluate(() => location.search);
   await page.screenshot({ path: 'shot_net.png', fullPage: false });
 
+  // ===== multi-seed map =====
+  checks.seedVisible = await page.$eval('#seedwrap', el => el.style.display !== 'none');
+  const preSeedNodes = await page.evaluate(() => window.NET.nodes.length);
+  await page.fill('#seedInput', 'quadrotor control');
+  await page.waitForSelector('#seedSug.open', { timeout: 5000 });
+  await page.click('#seedSug .sug');
+  await page.waitForTimeout(1500);
+  checks.seedCount = await page.evaluate(() => window.NET.seeds.length);
+  checks.seedNodesGrew = (await page.evaluate(() => window.NET.nodes.length)) > preSeedNodes;
+  checks.seedBridge = await page.evaluate(() => window.NET.edges.some(e2 => !e2.a.center && !e2.b.center) || window.NET.nodes.some(n => n.realCite));
+  checks.seedOwners = await page.evaluate(() => window.NET.nodes.filter(n => !n.center).every(n => !!n.owner));
+
+  await page.$eval('#netbox', el => el.scrollIntoView());
+  await page.waitForTimeout(2500);
+  const nb = await page.$('.p-net');
+  await nb.screenshot({ path: 'shot_multiseed.png' });
+
   // ===== author mode flow =====
   await page.click('#modeAuthor');
   await page.fill('#q', 'kartik singhal');
@@ -301,6 +354,16 @@ let srcDetail429 = 0;
   const jp = await page.$('#journeyPanel');
   await jp.screenshot({ path: 'shot_journey.png' });
   const co = await page.$('#coauthTab');
+  await page.click('#tabRank');
+  await page.click('#tabWhere');
+  await page.waitForTimeout(400);
+  const wtxt = await page.textContent('#wherenext');
+  checks.whereRows = wtxt.includes('IEEE Transactions on Robotics') && wtxt.includes('Franklin Institute');
+  checks.whereHome = wtxt.includes("you've published here ×9");
+  checks.whereNoRepo = !wtxt.includes('Some Repository');
+  checks.seedHiddenAuthor = await page.$eval('#seedwrap', el => el.style.display === 'none');
+  await page.waitForTimeout(400);
+  checks.orcidChips = (await page.textContent('#hero')).includes('IIT Bombay (2021–now)') && (await page.textContent('#hero')).includes('2 funded projects');
   await page.click('#tabRank');
   checks.aMoreBtn = await page.textContent('#moreBtn');
   await page.click('#moreBtn');

@@ -37,6 +37,9 @@ async function buildNetwork(w, ep) {
   $('#areasbox').style.display = 'none'; $('#areasbox').innerHTML = '';
   const tmb = $('#timeBtn'); tmb.classList.remove('on'); tmb.textContent = '🕰️ timeline view';
 
+  $('#seedwrap').style.display = '';
+  $('#seedInput').value = '';
+  $('#seedSug').className = 'suggest';
   const relIds = (w.related_works || []).map(idTail).filter(Boolean).slice(0, 12);
   const jobs = [];
   if (relIds.length) {
@@ -56,21 +59,22 @@ async function buildNetwork(w, ep) {
   const [related, topicTop] = await Promise.all(jobs);
   if (stale(ep)) return;
   const seen = new Set([idTail(w.id)]);
-  const nodes = [{ w, center: true, kind: 'this paper' }];
+  const seed = { w, center: true, kind: 'seed paper', seedIdx: 0 };
+  const nodes = [seed];
   const relOrder = new Map(relIds.map((id, i) => [id, i]));
   for (const r of related) {
     const id = idTail(r.id);
     if (seen.has(id)) continue; seen.add(id);
-    nodes.push({ w: r, kind: 'related work', relIdx: relOrder.get(id) ?? relIds.length - 1, relTotal: relIds.length });
+    nodes.push({ w: r, kind: 'related work', owner: seed, relIdx: relOrder.get(id) ?? relIds.length - 1, relTotal: relIds.length });
   }
   for (const r of topicTop) {
     const id = idTail(r.id);
     if (seen.has(id)) continue; seen.add(id);
-    nodes.push({ w: r, kind: 'topic heavyweight' });
+    nodes.push({ w: r, kind: 'topic heavyweight', owner: seed });
   }
   if (nodes.length < 2) { $('#netbox').innerHTML = '<div class="empty">🕳️ OpenAlex lists no related papers for this one. A lone wolf!</div>'; return; }
 
-  NET = { w, nodes, seen, topicId, topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null, mode: 'force', edges: [] };
+  NET = { w, nodes, seen, topicId, seeds: [seed], topicPage: 1, shown: [], isolated: null, tableOpen: false, raf: null, mode: 'force', edges: [] };
   for (const n of nodes) if (!n.center) n.close = closenessScore(w, n);
   computeEdges();
   refreshFields();
@@ -79,6 +83,94 @@ async function buildNetwork(w, ep) {
   $('#netctl').style.display = '';
   window.NET = NET; // handy for debugging
 }
+
+/* ---- multi-seed: blend another paper's orbit into the live map ---- */
+async function addSeed(idOrDoi) {
+  if (!NET || NET.authorId) return;
+  if (NET.seeds.length >= 3) { toast('three seeds is the limit — start fresh for a new blend 🌱'); return; }
+  const inp = $('#seedInput');
+  inp.disabled = true; inp.placeholder = '🌱 grafting the new seed…';
+  const myNet = NET;
+  try {
+    const w2 = await getJSON(`${API}/works/${encodeURIComponent(idOrDoi).replace(/%3A/g, ':').replace(/%2F/g, '/')}?select=${WORK_SELECT}`);
+    if (myNet !== NET) return;
+    const sid = idTail(w2.id);
+    if (NET.seen.has(sid)) { toast('that paper is already on the map 👀'); return; }
+    NET.seen.add(sid);
+    const seed = { w: w2, center: true, kind: 'seed paper', seedIdx: NET.seeds.length, fresh: 60 };
+    seed.x = NET.W - 40; seed.y = 40 + Math.random() * (NET.H - 80); seed.vx = 0; seed.vy = 0; seed.r = 30;
+    NET.seeds.push(seed); NET.nodes.push(seed);
+    // fetch this seed's orbit: related works + its topic's heavyweights
+    const relIds = (w2.related_works || []).map(idTail).filter(Boolean).slice(0, 10);
+    const jobs = [];
+    if (relIds.length) {
+      const f = relIds.join('|');
+      jobs.push(getJSONChain([
+        `${API}/works?filter=ids.openalex:${f}&per-page=25&select=${NET_SEL}`,
+        `${API}/works?filter=openalex_id:${f}&per-page=25&select=${NET_SEL}`,
+      ]).then(j => j.results || []).catch(() => []));
+    } else jobs.push(Promise.resolve([]));
+    const tid = w2.primary_topic && idTail(w2.primary_topic.id);
+    if (tid && tid !== NET.topicId) {
+      jobs.push(getJSON(`${API}/works?filter=primary_topic.id:${tid}&sort=cited_by_count:desc&per-page=6&page=1&select=${NET_SEL}`)
+        .then(j => j.results || []).catch(() => []));
+    } else jobs.push(Promise.resolve([]));
+    const [related, topicTop] = await Promise.all(jobs);
+    if (myNet !== NET) return;
+    const relOrder = new Map(relIds.map((id, i) => [id, i]));
+    let added = 0;
+    for (const r of [...related, ...topicTop]) {
+      if (NET.nodes.length >= NET_CAP) break;
+      const id = idTail(r.id);
+      if (NET.seen.has(id)) continue; NET.seen.add(id);
+      const n = { w: r, owner: seed, fresh: 60,
+        kind: relOrder.has(id) ? 'related work' : 'topic heavyweight',
+        relIdx: relOrder.get(id), relTotal: relIds.length };
+      n.close = closenessScore(w2, n);
+      n.x = seed.x + (Math.random() - 0.5) * 60; n.y = seed.y + (Math.random() - 0.5) * 60;
+      n.vx = 0; n.vy = 0; n.r = 10;
+      NET.nodes.push(n); added++;
+    }
+    resizeNodes();
+    computeEdges();
+    if (NET.mode === 'time') computeTimeTargets();
+    refreshFields();
+    renderNetLegend();
+    if (NET.tableOpen) renderNetTable();
+    NET.wake && NET.wake();
+    toast(`🌱 blended in “${(w2.display_name || '').slice(0, 40)}…” + ${added} of its neighbors`);
+  } catch (e) { toast('that seed would not take 🥀 — try another'); }
+  inp.disabled = false;
+  inp.placeholder = NET.seeds.length >= 3 ? '🎒 three seeds — map is full' : '➕ add another seed paper to blend maps (up to 3)…';
+  inp.value = '';
+}
+
+/* seed-adder autocomplete (papers only) */
+let seedAcT = null, seedSeq = 0;
+$('#seedInput').addEventListener('input', () => {
+  clearTimeout(seedAcT);
+  const v = $('#seedInput').value.trim();
+  if (v.length < 3) { $('#seedSug').className = 'suggest'; return; }
+  seedAcT = setTimeout(async () => {
+    const seq = ++seedSeq;
+    try {
+      const j = await getJSON(`${API}/autocomplete/works?q=${encodeURIComponent(v)}`);
+      if (seq !== seedSeq) return;
+      const box = $('#seedSug'); box.innerHTML = '';
+      const items = (j.results || []).slice(0, 5);
+      if (!items.length) { box.className = 'suggest'; return; }
+      for (const it of items) {
+        const b = el('button', 'sug');
+        b.innerHTML = `<span class="t">${esc(it.display_name)}</span>
+          <div class="m">${esc(it.hint || '')}<span class="cite-pill">${fmt(it.cited_by_count)} cites</span></div>`;
+        b.addEventListener('click', () => { $('#seedSug').className = 'suggest'; addSeed(idTail(it.id)); });
+        box.appendChild(b);
+      }
+      box.className = 'suggest open';
+    } catch (e) {}
+  }, 250);
+});
+document.addEventListener('click', e => { if (!e.target.closest('.seedwrap')) $('#seedSug').className = 'suggest'; });
 
 /* Real citation edges: node A -> node B when A's reference list contains B.
    Center hub links get promoted to 'real' when an actual citation exists. */
@@ -90,7 +182,12 @@ function computeEdges() {
     for (const ref of (n.w.referenced_works || [])) {
       const m = byId.get(idTail(ref));
       if (!m || m === n) continue;
-      if (n.center || m.center) { (n.center ? m : n).realCite = true; continue; }
+      if (n.center && m.center) { /* seed cites seed — draw it */ }
+      else if (n.center || m.center) {
+        const child = n.center ? m : n;
+        if (child.owner === (n.center ? n : m)) { child.realCite = true; continue; }
+        // citation to a *different* seed's child: draw as a bridge edge
+      }
       const key = [idTail(n.w.id), idTail(m.w.id)].sort().join('|');
       if (seenPair.has(key)) continue; seenPair.add(key);
       NET.edges.push({ a: n, b: m });
@@ -303,7 +400,10 @@ function drawNetwork() {
     n.vx = 0; n.vy = 0;
   });
   const center = nodes[0];
-  center.x = W / 2; center.y = H / 2;
+  const seedCount = (NET.seeds || [center]).length;
+  (NET.seeds || [center]).forEach((sn, k) => {
+    if (sn.x == null || sn === center) { sn.x = W * (k + 1) / (seedCount + 1); sn.y = H / 2; sn.vx = 0; sn.vy = 0; }
+  });
 
   const dimmed = n => NET.isolated && !n.center && netGroup(n) !== NET.isolated;
 
@@ -321,6 +421,17 @@ function drawNetwork() {
       }
       return energy > Math.max(1, nodes.length * 0.07) || !!dragging;
     }
+    // seeds glide to evenly spaced anchors; everyone else springs to its owner seed
+    const seeds = NET.seeds || [nodes[0]];
+    seeds.forEach((sn, k) => {
+      if (sn === dragging) return;
+      const ax = W * (k + 1) / (seeds.length + 1), ay = H / 2;
+      sn.vx = (sn.vx + (ax - sn.x) * 0.02) * 0.8;
+      sn.vy = (sn.vy + (ay - sn.y) * 0.02) * 0.8;
+      sn.x += sn.vx; sn.y += sn.vy;
+      if (sn.fresh) sn.fresh--;
+      energy += Math.abs(sn.vx) + Math.abs(sn.vy);
+    });
     // spring along real citation edges
     for (const e of NET.edges) {
       const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y;
@@ -329,15 +440,17 @@ function drawNetwork() {
       if (e.a !== dragging && !e.a.center) { e.a.vx += (dx / d) * f * 4; e.a.vy += (dy / d) * f * 4; }
       if (e.b !== dragging && !e.b.center) { e.b.vx -= (dx / d) * f * 4; e.b.vy -= (dy / d) * f * 4; }
     }
-    for (let i = 1; i < nodes.length; i++) {
+    for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
+      if (n.center) continue;
       if (n.fresh) n.fresh--;
       if (n === dragging) continue;
-      let dx = center.x - n.x, dy = center.y - n.y;
+      const home = n.owner || center;
+      let dx = home.x - n.x, dy = home.y - n.y;
       const d = Math.hypot(dx, dy) || 1, want = 150 + n.r * 2;
       const f = (d - want) * 0.004;
       n.vx += (dx / d) * f * d * 0.02; n.vy += (dy / d) * f * d * 0.02;
-      for (let j = 1; j < nodes.length; j++) {
+      for (let j = 0; j < nodes.length; j++) {
         if (i === j) continue;
         const m = nodes[j];
         let rx = n.x - m.x, ry = n.y - m.y;
@@ -377,12 +490,14 @@ function drawNetwork() {
     // hub links (association) — hidden in timeline mode
     if (NET.mode !== 'time') {
       ctx.lineWidth = 2;
-      for (let i = 1; i < nodes.length; i++) {
+      for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
+        if (n.center) continue;
+        const home = n.owner || center;
         const faded = dimmed(n);
         if (n.realCite) { ctx.setLineDash([]); ctx.strokeStyle = faded ? 'rgba(20,20,20,.07)' : 'rgba(20,20,20,.45)'; }
         else { ctx.setLineDash([6, 5]); ctx.strokeStyle = faded ? 'rgba(20,20,20,.05)' : 'rgba(20,20,20,.22)'; }
-        ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(n.x, n.y); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(home.x, home.y); ctx.lineTo(n.x, n.y); ctx.stroke();
       }
       ctx.setLineDash([]);
     }
@@ -431,7 +546,7 @@ function drawNetwork() {
     if (hover) {
       const n = hover;
       tipShow(`<div class="tt">${esc(n.w.display_name)}</div>
-        <div class="tm">${esc(n.kind)} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''}</div>`, e.clientX, e.clientY);
+        <div class="tm">${esc(n.kind)}${!n.center && n.owner && NET.seeds && NET.seeds.length > 1 ? ' of seed #' + (n.owner.seedIdx + 1) : ''} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''}</div>`, e.clientX, e.clientY);
     } else tipHide();
   });
   cv.addEventListener('pointerdown', e => { NET.wake && NET.wake(); const p = pos(e); dragging = hit(p); if (dragging) { try { cv.setPointerCapture(e.pointerId); } catch (err) {} dragging.dragStart = { x: p.x, y: p.y }; } });
