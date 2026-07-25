@@ -377,6 +377,13 @@ let srcDetail429 = 0;
   await page.evaluate(() => loadPaper('W2741809807'));
   await page.waitForTimeout(1000);
 
+  // citing-crew names load the author in-app
+  await page.click('#acards .acard .nm a');
+  await page.waitForTimeout(1500);
+  checks.crewInApp = (await page.textContent('#hero')).includes('Kartik Singhal'); checks.crewSearch = await page.evaluate(() => location.search);
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1000);
+
   // clickable author names in paper hero
   await page.click('#hero a.au');
   await page.waitForTimeout(1500);
