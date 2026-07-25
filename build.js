@@ -44,6 +44,10 @@ const onDisk = fs.readdirSync(path.join(SRC, 'js')).filter(f => f.endsWith('.js'
 const stray = onDisk.filter(f => !MANIFEST.includes(f));
 if (stray.length) throw new Error('modules not in MANIFEST: ' + stray.join(', '));
 
-const out = template.replace('__STYLES__', () => styles).replace('__SCRIPT__', () => script);
+const crypto = require('crypto');
+const pkg = JSON.parse(read(path.join(__dirname, 'package.json')));
+const srcHash = crypto.createHash('sha256').update(template + styles + mapdata + script).digest('hex').slice(0, 8);
+const versionStr = `v${pkg.version} · ${pkg.versionDate} · build ${srcHash}`;
+const out = template.replace('__STYLES__', () => styles).replace('__SCRIPT__', () => script).replace('__VERSION__', () => versionStr);
 fs.writeFileSync(path.join(__dirname, 'index.html'), out);
 console.log('built index.html —', out.length, 'bytes from', MANIFEST.length, 'modules');

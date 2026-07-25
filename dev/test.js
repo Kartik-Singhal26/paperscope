@@ -215,6 +215,7 @@ let srcDetail429 = 0;
   checks0 = {};
   checks0.trendingShown = await page.$eval('#trendingWrap', el => el.style.display !== 'none');
   checks0.trendingCards = await page.$$eval('.tcard', els => els.length);
+  checks0.versionFooter = (await page.textContent('#verSticker')).trim();
   await page.screenshot({ path: 'shot_home.png' });
 
   // autocomplete flow

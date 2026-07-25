@@ -1,9 +1,11 @@
 {
   "name": "paperscope",
   "private": true,
-  "description": "Feed it a paper → get the whole story. Single-file paper & researcher analytics on OpenAlex.",
+  "description": "Feed it a paper \u2192 get the whole story. Single-file paper & researcher analytics on OpenAlex.",
   "scripts": {
     "build": "node build.js",
     "test": "node dev/test.js"
-  }
+  },
+  "version": "1.0.0",
+  "versionDate": "2026-07-26"
 }
