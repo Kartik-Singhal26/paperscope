@@ -25,10 +25,24 @@ Open `index.html` in a browser. That's it — no build, no server, no API keys. 
 
 It's a static file: drop it on Netlify Drop, GitHub Pages, Vercel, or Cloudflare Pages as `index.html`.
 
+## Code structure & building
+
+`index.html` is the build artifact — a single self-contained file, committed so the repo stays drop-anywhere deployable. The source of truth lives in `src/`:
+
+```
+src/template.html   page shell (markup) with __STYLES__ / __SCRIPT__ tokens
+src/styles.css      all styling
+src/mapdata.json    embedded world-map grid + country centroids
+src/js/01-core.js   helpers, API client (cache + 429 retry), epoch guards, resize registry
+src/js/02-mode.js … 10-crew.js   one module per feature area (see build.js MANIFEST)
+```
+
+Edit files in `src/`, then `npm run build` (plain Node, zero dependencies) to regenerate `index.html`. The build is a deterministic concatenation — module order is the `MANIFEST` in `build.js`, and modules share one script scope, so declarations are global across files.
+
 ## Dev notes
 
 - `dev/test.js` — Playwright smoke test with mocked API fixtures. Run with `npm i playwright && node dev/test.js` (set `FALLBACK=1` to exercise the API-fallback paths). Adjust the `executablePath` / screenshot paths for your machine.
-- `dev/genmap.js` — regenerates the embedded dot-grid world map + country centroids from `world-atlas` and `world-countries` (`npm i world-atlas@2 topojson-client world-countries && node dev/genmap.js`), producing `mapdata.json` which is inlined into `index.html` as the `MAPDATA` constant.
+- `dev/genmap.js` — regenerates the embedded dot-grid world map + country centroids from `world-atlas` and `world-countries` (`npm i world-atlas@2 topojson-client world-countries && node dev/genmap.js`), writing `src/mapdata.json`; rebuild to inline it.
 - Every remote call has a graceful fallback chain, so a failing endpoint degrades a panel instead of breaking the page.
 
 ## Data sources & thanks

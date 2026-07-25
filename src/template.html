@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaperScope 🔭 — feed it a paper, get the whole story</title>
+<meta name="description" content="Type a paper or researcher and get the whole story: similar-paper maps, journal rank, citing countries, top citers, citation trends — free, powered by OpenAlex.">
+<meta property="og:title" content="PaperScope 🔭 — feed it a paper, get the whole story">
+<meta property="og:description" content="Instant analytics for any paper or researcher: similar-paper map, journal rank, world map of citers, author profiles, citation trends. Free & open data.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#F5EBD8">
+<style>__STYLES__</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="scope">🔭</span> PaperScope</div>
+    <div class="tag">feed it a paper → get the whole story</div>
+  </header>
+
+  <div class="modebar">
+    <button class="modebtn on" id="modePaper">📄 paper</button>
+    <button class="modebtn" id="modeAuthor">🧑‍🔬 author</button>
+  </div>
+  <div class="searchbox">
+    <div class="search-row">
+      <input id="q" type="text" autocomplete="off" spellcheck="false"
+        placeholder="Type a paper title or paste a DOI…" aria-label="Search for a paper or author">
+      <button class="btn" id="go">Scope it!</button>
+      <button class="btn alt" id="lucky" title="Try a random famous paper">🎲</button>
+    </div>
+    <div class="suggest" id="suggest" role="listbox"></div>
+  </div>
+  <div class="hint">Try <b>“Attention is all you need”</b>, <b>“CRISPR-Cas9”</b>, or paste a DOI like <b>10.1038/nature14539</b> · press 🎲 for pot luck</div>
+
+  <div id="trendingWrap" style="display:none">
+    <div class="trend-head">🔥 HOT OFF THE PRESS <span>— the most-cited papers of the past few months. Tap one to scope it.</span></div>
+    <div class="tcards" id="tcards"></div>
+  </div>
+
+  <div id="status"></div>
+
+  <div id="results">
+    <div class="hero" id="hero"></div>
+    <div class="grid">
+      <section class="panel p-net">
+        <div class="ptitle" id="netTitle">🕸️ SIMILAR-PAPER MAP</div>
+        <div class="psub" id="netsub">Papers orbiting this one — OpenAlex “related works” + heavy-hitters from the same topic. Node size = citations, color = subfield. Drag nodes! Click one to scope that paper.</div>
+        <div id="netbox"></div>
+        <div class="legend" id="netlegend"></div>
+        <div class="netctl" id="netctl" style="display:none">
+          <button class="btn mini" id="moreBtn">🪄 Spawn more papers</button>
+          <button class="btn mini time" id="timeBtn">🕰️ timeline view</button>
+          <button class="btn mini tbl" id="tableBtn"><span class="arr">▸</span> closeness table</button>
+          <button class="btn mini bib" id="bibAllBtn" title="Copy BibTeX entries for every paper on the map">📋 .bib</button>
+        </div>
+        <div id="nettable" style="display:none"></div>
+        <div id="areasbox" style="display:none"></div>
+      </section>
+
+      <section class="panel p-journal">
+        <div class="tabbar">
+          <button class="ptab on" id="tabRank">🏆 JOURNAL RANK</button>
+          <button class="ptab" id="tabTrend">📈 CITATION TREND</button>
+          <button class="ptab" id="tabCoauth" style="display:none">🤝 CO-AUTHORS</button>
+        </div>
+        <div id="rankTab">
+          <div class="psub" id="jsub">Where this venue sits in its subject, by 2-yr mean citedness (an impact-factor cousin).</div>
+          <div id="journal"></div>
+        </div>
+        <div id="trendTab" style="display:none">
+          <div class="psub">How the citations rolled in, year by year. Hover the bars.</div>
+          <div id="trend"></div>
+        </div>
+        <div id="coauthTab" style="display:none">
+          <div class="psub">Their most frequent partners in crime, by shared papers. Click a name to scope them.</div>
+          <div id="coauth"></div>
+        </div>
+      </section>
+
+      <section class="panel p-map">
+        <div class="ptitle" id="mapTitle">🌍 WHO CITES IT, WHERE</div>
+        <div class="psub" id="mapsub">Countries of the authors citing this paper.</div>
+        <div id="mapbox"></div>
+        <div class="cbars bars" id="cbars"></div>
+      </section>
+
+      <section class="panel p-authors">
+        <div class="ptitle" id="crewTitle">🧑‍🔬 THE CITING CREW</div>
+        <div class="psub" id="asub">The researchers who cite this paper most.</div>
+        <div class="acards" id="acards"></div>
+      </section>
+
+      <section class="panel p-journey" id="journeyPanel" style="display:none">
+        <div class="ptitle">🧭 RESEARCH JOURNEY</div>
+        <div class="psub" id="journeysub">Their papers per subfield per year — read each row left to right to watch the interests shift.</div>
+        <div id="journey"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
+    <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
+  </footer>
+</div>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>__SCRIPT__</script>
+</body>
+</html>

@@ -76,9 +76,9 @@ for (const c of countries) {
 const names = {};
 for (const c of countries) if (c.cca2) names[c.cca2] = c.name.common;
 
-fs.writeFileSync('mapdata.json', JSON.stringify({
+fs.writeFileSync(require('path').join(__dirname, '..', 'src', 'mapdata.json'), JSON.stringify({
   grid: { cols: COLS, rows: ROWS, latTop: LAT_TOP, latBot: LAT_BOT, hexRows },
   centroids: cent,
   names
 }));
-console.log('land cells:', rows.join('').split('1').length - 1, '| countries:', Object.keys(cent).length, '| bytes:', fs.statSync('mapdata.json').size);
+console.log('land cells:', rows.join('').split('1').length - 1, '| countries:', Object.keys(cent).length, '| bytes:', fs.statSync(require('path').join(__dirname, '..', 'src', 'mapdata.json')).size);

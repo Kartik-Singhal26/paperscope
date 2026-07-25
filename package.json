@@ -1,0 +1,9 @@
+{
+  "name": "paperscope",
+  "private": true,
+  "description": "Feed it a paper → get the whole story. Single-file paper & researcher analytics on OpenAlex.",
+  "scripts": {
+    "build": "node build.js",
+    "test": "node dev/test.js"
+  }
+}
