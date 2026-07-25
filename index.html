@@ -364,12 +364,16 @@
   .foot-sticker.ver{font-size:11.5px; transform:rotate(.5deg); color:var(--muted);}
   .foot-sticker.ver a{text-decoration:none; font-weight:800;}
   .foot-sticker.ver a:hover{background:var(--sky);}
+
+  button.logo{cursor:pointer; font-family:inherit;}
+  button.logo:hover{transform:rotate(-1.2deg) translate(-2px,-2px); box-shadow:9px 9px 0 var(--ink);}
+  button.logo:active{transform:rotate(-1.2deg) translate(3px,3px); box-shadow:2px 2px 0 var(--ink);}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><span class="scope">🔭</span> PaperScope</div>
+    <button class="logo" id="homeBtn" title="Back to the landing page"><span class="scope">🔭</span> PaperScope</button>
     <div class="tag">feed it a paper → get the whole story</div>
   </header>
 
@@ -500,7 +504,7 @@
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
     <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
-    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.0.0 · 2026-07-26 · build 748bf9b2</a></span>
+    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.0.1 · 2026-07-26 · build 5129a22f</a></span>
   </footer>
 </div>
 <div id="tip"></div>
@@ -1005,6 +1009,7 @@ function toast(msg) {
 function setPermalink(w) {
   try {
     const u = new URL(location.href);
+    u.searchParams.delete('a'); u.searchParams.delete('vs');
     u.searchParams.set('w', idTail(w.id));
     history.replaceState(null, '', u);
   } catch (e) { /* file:// in some browsers */ }
@@ -1101,7 +1106,7 @@ async function loadAuthor(idOrOrcid) {
 function setAuthorPermalink(a) {
   try {
     const u = new URL(location.href);
-    u.searchParams.delete('w');
+    u.searchParams.delete('w'); u.searchParams.delete('vs');
     u.searchParams.set('a', idTail(a.id));
     history.replaceState(null, '', u);
   } catch (e) {}
@@ -1850,6 +1855,26 @@ function renderNetTable() {
     box.appendChild(a);
   });
 }
+
+/* logo click: back to the landing page, everything reset */
+function goHome() {
+  EPOCH++;                       // cancel anything in flight
+  if (NET && NET.raf) { cancelAnimationFrame(NET.raf); NET.raf = null; NET.idle = true; }
+  clearStatus();
+  setMode('paper');
+  setModeTexts('paper');
+  $('#results').className = '';
+  $('#vsresults').style.display = 'none';
+  qInput.value = '';
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete('w'); u.searchParams.delete('a'); u.searchParams.delete('vs');
+    history.replaceState(null, '', u);
+  } catch (e) {}
+  loadTrending();                // cached after first visit — instant
+  scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('#homeBtn').addEventListener('click', goHome);
 
 /* landing page: a taste of what the machine can do */
 async function loadTrending() {

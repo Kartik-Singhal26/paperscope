@@ -244,6 +244,7 @@ function toast(msg) {
 function setPermalink(w) {
   try {
     const u = new URL(location.href);
+    u.searchParams.delete('a'); u.searchParams.delete('vs');
     u.searchParams.set('w', idTail(w.id));
     history.replaceState(null, '', u);
   } catch (e) { /* file:// in some browsers */ }

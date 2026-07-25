@@ -49,7 +49,7 @@ async function loadAuthor(idOrOrcid) {
 function setAuthorPermalink(a) {
   try {
     const u = new URL(location.href);
-    u.searchParams.delete('w');
+    u.searchParams.delete('w'); u.searchParams.delete('vs');
     u.searchParams.set('a', idTail(a.id));
     history.replaceState(null, '', u);
   } catch (e) {}

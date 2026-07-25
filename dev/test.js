@@ -479,6 +479,22 @@ let srcDetail429 = 0;
   await page.evaluate(() => loadPaper('W2741809807'));
   await page.waitForTimeout(1000);
 
+  // logo returns to landing page
+  await page.evaluate(() => { window.__loads = 0; const orig = window.loadPaper; window.loadPaper = function(id) { window.__loads++; window.__lastLoad = id + ' @' + new Error().stack.split('\n')[2]; return orig(id); }; });
+  await page.click('#homeBtn');
+  checks.homeImmediate = await page.evaluate(() => ({ cls: document.getElementById('results').className, search: location.search, trend: document.getElementById('trendingWrap').style.display }));
+  await page.waitForTimeout(600);
+  checks.homeLoads = await page.evaluate(() => ({ n: window.__loads, last: window.__lastLoad }));
+  checks.homeResultsHidden = await page.$eval('#results', el => !el.className.includes('on'));
+  checks.homeDebugHero = (await page.textContent('#hero')).slice(0, 60);
+  checks.homeDebugSearch = await page.evaluate(() => location.search);
+  checks.homeDebugStatus = await page.evaluate(() => document.getElementById('status').className);
+  checks.homeTrending = await page.$eval('#trendingWrap', el => el.style.display !== 'none');
+  checks.homeUrlClean = await page.evaluate(() => !location.search.match(/[wa]=|vs=/));
+  checks.homeSearchCleared = await page.$eval('#q', el => el.value === '');
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1000);
+
   // clickable author names in paper hero
   await page.click('#hero a.au');
   await page.waitForTimeout(1500);

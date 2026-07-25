@@ -6,6 +6,6 @@
     "build": "node build.js",
     "test": "node dev/test.js"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "versionDate": "2026-07-26"
 }
