@@ -13,6 +13,8 @@ Papers carry **FWCI and field-percentile badges** ("top 1% of its field-year"), 
 
 **Author mode** (🧑‍🔬 toggle): type a researcher's name or paste an ORCID for a whole-career dashboard — paper portfolio map with self-citation links, career timeline, top venues, citation trend, fan countries, top citing authors, a self-citation "organic rate," a co-authors tab, a research-journey chart of their subfields over the years, a **🎯 Where Next** venue recommender (impact × topic fit × familiar turf), and **ORCID career chips** (employment + funding) when the registry has them.
 
+**⚔️ Compare mode**: pit two papers or two researchers head-to-head — a tale-of-the-tape with tug-of-war bars, a grouped citations-per-year trend duel, and a reach comparison of citing countries, all shareable via `?vs=` permalinks.
+
 Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose broader corpus usually sits closer to Google Scholar's number), with a one-click Google Scholar link. The 🎲 button rolls a random paper from OpenAlex's ~250M-work catalog.
 
 ![screenshot](docs_screenshot.png)

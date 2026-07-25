@@ -11,6 +11,7 @@ async function loadAuthor(idOrOrcid) {
     if (stale(ep)) return;
     clearStatus();
     $('#trendingWrap').style.display = 'none';
+    $('#vsresults').style.display = 'none';
     setMode('author');
     setModeTexts('author');
     renderAuthorHero(a, ep);

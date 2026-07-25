@@ -23,6 +23,7 @@ const MANIFEST = [
   '08-citers.js',  // shared citing-works fetch
   '09-map.js',     // dot-grid world map + bubbles
   '10-crew.js',    // citing-author cards
+  '11-compare.js', // ⚔️ VS mode: papers or authors head-to-head
 ];
 
 const read = f => fs.readFileSync(f, 'utf8');

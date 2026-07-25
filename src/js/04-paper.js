@@ -10,6 +10,7 @@ async function loadPaper(idOrDoi) {
     if (stale(ep)) return;
     clearStatus();
     $('#trendingWrap').style.display = 'none';
+    $('#vsresults').style.display = 'none';
     setModeTexts('paper');
     setMode('paper');
     renderHero(w);

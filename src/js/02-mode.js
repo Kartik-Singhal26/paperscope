@@ -8,8 +8,19 @@ function setMode(m) {
   MODE = m;
   $('#modePaper').classList.toggle('on', m === 'paper');
   $('#modeAuthor').classList.toggle('on', m === 'author');
-  qInput.placeholder = MODE_UI[m].ph;
-  document.querySelector('.hint').innerHTML = MODE_UI[m].hint;
+  $('#modeCompare').classList.toggle('on', m === 'compare');
+  const cmp = m === 'compare';
+  document.querySelector('.searchbox').style.display = cmp ? 'none' : '';
+  document.querySelector('.hint').style.display = cmp ? 'none' : '';
+  $('#vsbar').style.display = cmp ? '' : 'none';
+  if (!cmp) {
+    $('#vsresults').style.display = 'none';
+    qInput.placeholder = MODE_UI[m].ph;
+    document.querySelector('.hint').innerHTML = MODE_UI[m].hint;
+  } else {
+    $('#results').className = '';
+    $('#trendingWrap').style.display = 'none';
+  }
   closeSug();
 }
 $('#modePaper') && document.addEventListener('DOMContentLoaded', () => {});

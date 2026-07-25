@@ -120,6 +120,10 @@ function routeFor(url) {
     if (u.includes('filter=ids.openalex:W90')) return null;
     if (u.includes('/authors?filter=ids.openalex:')) return null;
   }
+  if (u.match(/\/works\/W123\?/)) return { ...work('W123', 'Attention in psychology', 1990, 500, 'Psychology'),
+    authorships: [], topics: [], concepts: [], related_works: [], referenced_works: ['https://openalex.org/W1', 'https://openalex.org/W2'],
+    counts_by_year: Array.from({ length: 9 }, (_, i) => ({ year: 2018 + i, cited_by_count: 30 + i * 5 })),
+    open_access: {}, fwci: 1.4, citation_normalized_percentile: { value: 0.81 }, biblio: {} };
   if (u.match(/\/works\/W777\?/)) return SEED2;
   if (u.includes('filter=ids.openalex:W770|W771') || u.includes('filter=openalex_id:W770|W771')) return seed2Orbit;
   if (u.includes('filter=primary_topic.id:T222')) return { results: [], meta: { count: 0 } };
@@ -384,6 +388,33 @@ let srcDetail429 = 0;
 
   // back to paper mode via in-app switch for pot luck test
   await page.click('#modePaper');
+
+  // ===== compare mode =====
+  await page.click('#modeCompare');
+  checks.vsBarShown = await page.$eval('#vsbar', el => el.style.display !== 'none');
+  checks.vsSearchHidden = await page.$eval('.searchbox', el => el.style.display === 'none');
+  await page.fill('#vsA', 'attention is all');
+  await page.waitForSelector('#vsASug.open', { timeout: 5000 });
+  await page.click('#vsASug .sug');                      // first suggestion = main fixture
+  await page.fill('#vsB', 'attention is all');
+  await page.waitForSelector('#vsBSug.open', { timeout: 5000 });
+  await page.click('#vsBSug .sug:nth-child(2)');         // second suggestion = W123
+  await page.waitForTimeout(1800);
+  const vsHero = await page.textContent('#vsHeroes');
+  checks.vsHeroes = vsHero.includes('CONTENDER A') && vsHero.includes('Attention in psychology');
+  const tape = await page.textContent('#vstape');
+  checks.vsTape = tape.includes('citations') && tape.includes('FWCI');
+  checks.vsTapeWins = await page.$$eval('#vstape .win', els => els.length);
+  checks.vsTrendBars = await page.$$eval('#vstrend rect', els => els.length);
+  checks.vsGeo = (await page.textContent('#vsgeo')).includes('countries');
+  checks.vsGeoDebug = await page.evaluate(() => vsCountries('W2741809807').then(r => r.length).catch(e => 'ERR ' + e.message));
+  checks.vsPermalink = await page.evaluate(() => location.search);
+  await page.screenshot({ path: 'shot_vs.png', fullPage: true });
+  // exit compare mode → normal paper flow returns
+  await page.click('#modePaper');
+  checks.vsExit = await page.$eval('#vsresults', el => el.style.display === 'none');
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1200);
 
   // pot-luck roll
   await page.click('#lucky');
