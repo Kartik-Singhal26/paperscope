@@ -2052,7 +2052,7 @@ async function buildAuthors(w, citersP, ep) {
     card.innerHTML = `
       <div class="avatar" style="background:${PALETTE[i % PALETTE.length]}">${esc(initials)}</div>
       <div class="who">
-        <div class="nm"><a href="https://openalex.org/${esc(t.id)}" target="_blank" rel="noopener">${esc(t.name)}</a></div>
+        <div class="nm"><a href="#" data-aid="${esc(t.id)}" title="Scope this researcher — their whole citation story">${esc(t.name)}</a></div>
         <div class="inst">${cc ? flag(cc) + ' ' : ''}${instId ? `<a href="${esc(instId)}" target="_blank" rel="noopener" title="Open this institution on OpenAlex">${esc(inst)}</a>` : esc(inst)}</div>
         <div class="apills">
           <span class="apill n">cites this ×${t.n}</span>
@@ -2061,6 +2061,11 @@ async function buildAuthors(w, citersP, ep) {
           ${e2.cited_by_count != null ? `<span class="apill">${fmt(e2.cited_by_count)} cites</span>` : ''}
         </div>
       </div>`;
+    card.querySelector('a[data-aid]').addEventListener('click', ev => {
+      ev.preventDefault();
+      scrollTo({ top: 0, behavior: 'smooth' });
+      loadAuthor(t.id);
+    });
     box.appendChild(card);
   });
 }
