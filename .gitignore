@@ -2,3 +2,6 @@ node_modules/
 package-lock.json
 *.png
 !docs_screenshot.png
+dist/
+.wrangler/
+wrangler.jsonc.bak

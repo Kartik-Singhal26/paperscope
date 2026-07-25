@@ -50,4 +50,12 @@ const srcHash = crypto.createHash('sha256').update(template + styles + mapdata +
 const versionStr = `v${pkg.version} · ${pkg.versionDate} · build ${srcHash}`;
 const out = template.replace('__STYLES__', () => styles).replace('__SCRIPT__', () => script).replace('__VERSION__', () => versionStr);
 fs.writeFileSync(path.join(__dirname, 'index.html'), out);
-console.log('built index.html —', out.length, 'bytes from', MANIFEST.length, 'modules');
+// clean deploy dir: just the app + the OG image
+const dist = path.join(__dirname, 'dist');
+fs.mkdirSync(dist, { recursive: true });
+fs.writeFileSync(path.join(dist, 'index.html'), out);
+for (const extra of ['docs_screenshot.png']) {
+  const src2 = path.join(__dirname, extra);
+  if (fs.existsSync(src2)) fs.copyFileSync(src2, path.join(dist, extra));
+}
+console.log('built index.html + dist/ —', out.length, 'bytes from', MANIFEST.length, 'modules');
