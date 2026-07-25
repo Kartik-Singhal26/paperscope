@@ -8,6 +8,10 @@ const idTail = url => String(url || '').split('/').pop();
 const flag = cc => cc && /^[A-Za-z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
 const PALETTE = ['#3A86FF','#FB5607','#068F6C','#C98A00','#E4569B','#7B2FBF'];
 const API = 'https://api.openalex.org';
+const BASE_TITLE = 'PaperScope 🔭 — feed it a paper, get the whole story';
+function setTitle(t) {
+  document.title = t ? `${String(t).slice(0, 70)} — PaperScope 🔭` : BASE_TITLE;
+}
 window.IS_TOUCH = matchMedia('(pointer: coarse)').matches; // tap-once-preview, tap-twice-act on canvases
 let touchTipT = null;
 function touchTip(html, x, y) {

@@ -14,6 +14,7 @@ async function loadPaper(idOrDoi) {
     setModeTexts('paper');
     setMode('paper');
     renderHero(w);
+    setTitle(w.display_name);
     setPermalink(w);
     RESIZERS.delete('journey');
     enrichSemanticScholar(w, ep); // best-effort second opinion on citations

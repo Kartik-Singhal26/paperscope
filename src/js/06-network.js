@@ -337,6 +337,7 @@ function goHome() {
     u.searchParams.delete('w'); u.searchParams.delete('a'); u.searchParams.delete('vs');
     history.replaceState(null, '', u);
   } catch (e) {}
+  setTitle(null);
   loadTrending();                // cached after first visit — instant
   scrollTo({ top: 0, behavior: 'smooth' });
 }

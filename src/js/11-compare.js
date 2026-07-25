@@ -100,6 +100,7 @@ async function buildCompare() {
       u.searchParams.set('vs', `${VS.aId}.${VS.bId}`);
       history.replaceState(null, '', u);
     } catch (e) {}
+    setTitle(`${(A.display_name || '').slice(0, 30)} vs ${(B.display_name || '').slice(0, 30)}`);
     renderVsHeroes(A, B);
     renderVsTape(A, B);
     renderVsTrend(A, B);
