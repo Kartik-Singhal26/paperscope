@@ -112,7 +112,8 @@ function routeFor(url) {
     { key: 'https://openalex.org/A801', key_display_name: 'Vineet Kumar', count: 18 },
     { key: 'https://openalex.org/A802', key_display_name: 'K.P.S. Rana', count: 14 },
   ] };
-  if (u.includes('authorships.author.id:A5023888391') && u.includes('select=publication_year,primary_topic')) return { meta: { count: 42 }, results: Array.from({ length: 40 }, (_, i) => ({
+  if (u.includes('authorships.author.id:A5023888391') && u.includes('select=id,display_name,publication_year,cited_by_count,doi,primary_topic')) return { meta: { count: 42 }, results: Array.from({ length: 40 }, (_, i) => ({
+    id: `https://openalex.org/W64${i}`, display_name: `Journey paper ${i}`, cited_by_count: 100 - i, doi: null,
     publication_year: 2016 + (i % 10),
     primary_topic: { subfield: { display_name: ['Control and Systems Engineering', 'Artificial Intelligence', 'Signal Processing'][i % 3] }, field: { display_name: 'Engineering' } },
   })) };
@@ -279,6 +280,12 @@ function routeFor(url) {
   checks.aCoauth = coTxt.includes('Vineet Kumar') && coTxt.includes('18×') && !coTxt.match(/#\d+\s*Kartik/);
   checks.aJourneyCells = await page.$$eval('#journey .jcell', els => els.length);
   checks.aJourneyRows = (await page.textContent('#journey')).includes('Control and Systems Engineering');
+  await page.click('#journey .jcell.has');
+  await page.waitForTimeout(200);
+  const jd = await page.textContent('#journeyDetail');
+  checks.aCellDetail = jd.includes('Journey paper') && jd.includes('cites');
+  await page.click('.jd-close');
+  checks.aCellClosed = await page.$eval('#journeyDetail', el => el.style.display === 'none');
   const jp = await page.$('#journeyPanel');
   await jp.screenshot({ path: 'shot_journey.png' });
   const co = await page.$('#coauthTab');

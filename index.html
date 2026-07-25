@@ -266,6 +266,18 @@
   .jcell{height:27px; border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:900;}
   .jlabel{font-size:12px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:6px;}
   .jyear{font-size:10.5px; font-weight:800; color:var(--muted); text-align:center;}
+  .jcell.has{cursor:pointer;}
+  .jcell.has:hover{outline:3px solid var(--c2); outline-offset:-1px;}
+  .jcell.sel{outline:3px solid var(--c2); outline-offset:-1px; box-shadow:2px 2px 0 var(--ink);}
+  #journeyDetail{margin-top:14px; border:3px solid var(--ink); background:#fff; box-shadow:var(--bs-sm);}
+  .jd-head{display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:3px solid var(--ink); font-size:13.5px; background:var(--lav); font-weight:700;}
+  .jd-close{margin-left:auto; border:2.5px solid var(--ink); background:#fff; font-weight:900; cursor:pointer; padding:1px 8px;}
+  .jd-close:hover{background:var(--pink);}
+  .jd-row{display:flex; gap:12px; align-items:baseline; padding:9px 14px; border-bottom:2px dashed rgba(20,20,20,.15); font-size:13px; font-weight:700; text-decoration:none; color:inherit;}
+  .jd-row:last-child{border-bottom:none;}
+  .jd-row:hover{background:var(--sky);}
+  .jd-row .ti{font-weight:800; min-width:0;}
+  .jd-cites{margin-left:auto; flex:none; font-weight:800; color:var(--muted); font-size:12px;}
   .btn.time.on{background:var(--lime);}
   footer{margin-top:60px; text-align:center; font-weight:700; font-size:13px; color:var(--muted);}
   footer a{font-weight:800;}
@@ -1051,7 +1063,7 @@ async function buildCoauthors(a) {
 
 /* research journey: stacked subfield areas over the years */
 async function buildJourney(a) {
-  const j = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&sort=publication_date:desc&per-page=200&select=publication_year,primary_topic`);
+  const j = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&sort=publication_date:desc&per-page=200&select=id,display_name,publication_year,cited_by_count,doi,primary_topic`);
   const works = (j.results || []).filter(x => x.publication_year);
   const total = (j.meta && j.meta.count) || works.length;
   const box = $('#journey');
@@ -1065,7 +1077,14 @@ async function buildJourney(a) {
   const y0 = Math.min(...works.map(x => x.publication_year)), y1 = Math.max(...works.map(x => x.publication_year));
   const years = []; for (let y = y0; y <= y1; y++) years.push(y);
   const counts = years.map(y => { const c = {}; for (const k of series) c[k] = 0; return c; });
-  for (const x of works) counts[x.publication_year - y0][grp(x)]++;
+  const cellPapers = new Map();
+  for (const x of works) {
+    const k = grp(x);
+    counts[x.publication_year - y0][k]++;
+    const key = k + '|' + x.publication_year;
+    if (!cellPapers.has(key)) cellPapers.set(key, []);
+    cellPapers.get(key).push(x);
+  }
 
   // order rows by when each subfield first appears — the journey reads top-to-bottom
   const firstIdx = k => counts.findIndex(c => c[k] > 0);
@@ -1082,7 +1101,7 @@ async function buildJourney(a) {
     years.forEach((y, i) => {
       const v = counts[i][k];
       const bg = shade(v);
-      grid += `<div class="jcell" data-t="${esc(k)} · ${y}: ${v} paper${v === 1 ? '' : 's'}" style="background:${bg || '#fff'};${bg ? '' : 'border-color:rgba(20,20,20,.18);'}color:${v && RAMP.indexOf(bg) >= 3 ? '#fff' : '#141414'}">${v || ''}</div>`;
+      grid += `<div class="jcell${v ? ' has' : ''}" data-key="${esc(k)}|${y}" data-t="${esc(k)} · ${y}: ${v} paper${v === 1 ? '' : 's'}${v ? ' — click to see them' : ''}" style="background:${bg || '#fff'};${bg ? '' : 'border-color:rgba(20,20,20,.18);'}color:${v && RAMP.indexOf(bg) >= 3 ? '#fff' : '#141414'}">${v || ''}</div>`;
     });
   }
   grid += `<div></div>`;
@@ -1095,10 +1114,36 @@ async function buildJourney(a) {
       ${RAMP.map((c, i) => `<span class="lg"><i style="background:${c}"></i>${i === 0 ? '1' : i === RAMP.length - 1 ? 'up to ' + maxCell : ''}</span>`).join('')}
     </div>
     ${total > works.length ? `<div class="psub" style="margin-top:8px">Based on their ${works.length} most recent papers (of ${fmt(total)}).</div>` : ''}
+    <div id="journeyDetail" style="display:none"></div>
   `;
+  const detail = $('#journeyDetail');
+  let selKey = null;
+  const closeDetail = () => { selKey = null; detail.style.display = 'none'; detail.innerHTML = ''; box.querySelectorAll('.jcell.sel').forEach(c => c.classList.remove('sel')); };
   box.querySelectorAll('.jcell').forEach(c => {
     c.addEventListener('pointermove', e => tipShow(`<div class="tt">${c.dataset.t}</div>`, e.clientX, e.clientY));
     c.addEventListener('pointerleave', tipHide);
+    c.addEventListener('click', () => {
+      const key = c.dataset.key;
+      const papers = cellPapers.get(key);
+      if (!papers || key === selKey) { closeDetail(); return; }
+      closeDetail();
+      selKey = key; c.classList.add('sel');
+      const [kk, yy] = key.split('|');
+      let html = `<div class="jd-head"><b>${esc(kk)} · ${yy}</b> — ${papers.length} paper${papers.length === 1 ? '' : 's'}
+        <button class="jd-close" title="Close">✕</button></div>`;
+      for (const p of papers.slice().sort((a2, b2) => (b2.cited_by_count || 0) - (a2.cited_by_count || 0))) {
+        html += `<a class="jd-row" href="#" data-wid="${esc(idTail(p.id))}" title="Open this paper in PaperScope">
+          <span class="ti">${esc(p.display_name)}</span>
+          <span class="jd-cites">${fmt(p.cited_by_count)} cites</span></a>`;
+      }
+      detail.innerHTML = html;
+      detail.style.display = '';
+      detail.querySelector('.jd-close').addEventListener('click', closeDetail);
+      detail.querySelectorAll('a[data-wid]').forEach(x => x.addEventListener('click', ev => {
+        ev.preventDefault(); scrollTo({ top: 0, behavior: 'smooth' }); loadPaper(x.dataset.wid);
+      }));
+      detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   });
 }
 
