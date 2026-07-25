@@ -25,7 +25,7 @@ Open `index.html` in a browser. That's it — no build, no server, no API keys. 
 
 ## Host it
 
-It's a static file: drop it on Netlify Drop, GitHub Pages, or Cloudflare Pages as `index.html`.
+Live at **[paperscope.net](https://paperscope.net)** (Cloudflare Pages, auto-deploys from `main`). It's a static file — any static host serves it as `index.html`.
 
 ## Code structure & building
 
