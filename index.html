@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PaperScope 🔭 — feed it a paper, get the whole story</title>
+<meta name="description" content="Type a paper or researcher and get the whole story: similar-paper maps, journal rank, citing countries, top citers, citation trends — free, powered by OpenAlex.">
+<meta property="og:title" content="PaperScope 🔭 — feed it a paper, get the whole story">
+<meta property="og:description" content="Instant analytics for any paper or researcher: similar-paper map, journal rank, world map of citers, author profiles, citation trends. Free & open data.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#F5EBD8">
 <style>
   :root{
     --paper:#FFF8EC; --page:#F5EBD8; --ink:#141414; --muted:#6b6357;
@@ -76,6 +82,18 @@
   .sug .t{font-weight:800; font-size:15px; line-height:1.25;}
   .sug .m{font-size:12.5px; color:var(--muted); font-weight:600; margin-top:3px;}
   .sug .cite-pill{display:inline-block; background:var(--ink); color:var(--paper); font-size:11px; font-weight:800; padding:1px 8px; margin-left:6px; border-radius:99px;}
+
+  /* ---------- trending strip ---------- */
+  #trendingWrap{max-width:1180px; margin:34px auto 0;}
+  .trend-head{font-weight:900; font-size:16px; margin-bottom:16px;}
+  .trend-head span{font-weight:700; font-size:13px; color:var(--muted);}
+  .tcards{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  @media (max-width:900px){ .tcards{grid-template-columns:1fr;} }
+  .tcard{background:var(--paper); border:3px solid var(--ink); box-shadow:var(--bs-sm); padding:14px 16px; cursor:pointer; text-align:left; font:inherit; transition:transform .08s;}
+  .tcard:hover{transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--ink); background:#fff;}
+  .tcard .tt2{font-weight:800; font-size:14px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
+  .tcard .tm2{margin-top:9px; font-size:12px; font-weight:700; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .tcard .cite-pill{margin-left:0;}
 
   /* ---------- status / loading ---------- */
   #status{max-width:820px; margin:22px auto; display:none;}
@@ -306,6 +324,11 @@
   </div>
   <div class="hint">Try <b>“Attention is all you need”</b>, <b>“CRISPR-Cas9”</b>, or paste a DOI like <b>10.1038/nature14539</b> · press 🎲 for pot luck</div>
 
+  <div id="trendingWrap" style="display:none">
+    <div class="trend-head">🔥 HOT OFF THE PRESS <span>— the most-cited papers of the past few months. Tap one to scope it.</span></div>
+    <div class="tcards" id="tcards"></div>
+  </div>
+
   <div id="status"></div>
 
   <div id="results">
@@ -388,6 +411,13 @@ const idTail = url => String(url || '').split('/').pop();
 const flag = cc => cc && /^[A-Za-z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
 const PALETTE = ['#3A86FF','#FB5607','#068F6C','#C98A00','#E4569B','#7B2FBF'];
 const API = 'https://api.openalex.org';
+window.IS_TOUCH = matchMedia('(pointer: coarse)').matches; // tap-once-preview, tap-twice-act on canvases
+let touchTipT = null;
+function touchTip(html, x, y) {
+  tipShow(html, x, y);
+  clearTimeout(touchTipT);
+  touchTipT = setTimeout(tipHide, 2600);
+}
 let EPOCH = 0;                                   // bumped on every navigation
 const RESIZERS = new Map();                      // panel -> re-render thunk (cache makes these cheap)
 let resizeT = null;
@@ -619,6 +649,7 @@ async function loadPaper(idOrDoi) {
     const w = await getJSON(`${API}/works/${encodeURIComponent(idOrDoi).replace(/%3A/g,':').replace(/%2F/g,'/')}?select=${WORK_SELECT}`);
     if (stale(ep)) return;
     clearStatus();
+    $('#trendingWrap').style.display = 'none';
     setModeTexts('paper');
     setMode('paper');
     renderHero(w);
@@ -908,6 +939,7 @@ async function loadAuthor(idOrOrcid) {
     const a = await getJSON(`${API}/authors/${encodeURIComponent(idOrOrcid).replace(/%3A/g, ':').replace(/%2F/g, '/')}?select=${AUTHOR_SELECT}`);
     if (stale(ep)) return;
     clearStatus();
+    $('#trendingWrap').style.display = 'none';
     setMode('author');
     setModeTexts('author');
     renderAuthorHero(a);
@@ -1525,12 +1557,35 @@ function renderNetTable() {
   });
 }
 
-// boot: open straight to a paper if the URL carries one
+/* landing page: a taste of what the machine can do */
+async function loadTrending() {
+  try {
+    const since = new Date(Date.now() - 150 * 864e5).toISOString().slice(0, 10);
+    const j = await getJSON(`${API}/works?filter=from_publication_date:${since},cited_by_count:>20,has_doi:true&sort=cited_by_count:desc&per-page=6&select=id,display_name,publication_year,cited_by_count,primary_topic,primary_location`);
+    const works = (j.results || []).slice(0, 6);
+    if (!works.length) return;
+    const box = $('#tcards'); box.innerHTML = '';
+    for (const w of works) {
+      const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
+      const field = w.primary_topic && w.primary_topic.field && w.primary_topic.field.display_name;
+      const c = el('button', 'tcard');
+      c.innerHTML = `<div class="tt2">${esc(w.display_name)}</div>
+        <div class="tm2"><span class="cite-pill">${fmt(w.cited_by_count)} cites</span>
+        <span>${esc(w.publication_year ?? '')}</span>${venue ? `<span>· ${esc(venue)}</span>` : ''}${field ? `<span>· ${esc(field)}</span>` : ''}</div>`;
+      c.addEventListener('click', () => loadPaper(idTail(w.id)));
+      box.appendChild(c);
+    }
+    $('#trendingWrap').style.display = '';
+  } catch (e) { /* landing just stays minimal */ }
+}
+
+// boot: open straight to a paper if the URL carries one — else show the trending strip
 try {
   const bootP = new URLSearchParams(location.search);
   const bootW = bootP.get('w'), bootA = bootP.get('a');
   if (bootA && /^A\d+$/.test(bootA)) { setMode('author'); loadAuthor(bootA); }
   else if (bootW && /^W\d+$/.test(bootW)) loadPaper(bootW);
+  else loadTrending();
 } catch (e) {}
 
 $('#timeBtn').addEventListener('click', () => {
@@ -1711,11 +1766,22 @@ function drawNetwork() {
         <div class="tm">${esc(n.kind)} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''}</div>`, e.clientX, e.clientY);
     } else tipHide();
   });
-  cv.addEventListener('pointerdown', e => { NET.wake && NET.wake(); const p = pos(e); dragging = hit(p); if (dragging) { cv.setPointerCapture(e.pointerId); dragging.dragStart = { x: p.x, y: p.y }; } });
+  cv.addEventListener('pointerdown', e => { NET.wake && NET.wake(); const p = pos(e); dragging = hit(p); if (dragging) { try { cv.setPointerCapture(e.pointerId); } catch (err) {} dragging.dragStart = { x: p.x, y: p.y }; } });
   cv.addEventListener('pointerup', e => {
     if (dragging) {
       const p = pos(e), s = dragging.dragStart;
-      if (s && Math.hypot(p.x - s.x, p.y - s.y) < 5 && !dragging.center) { scrollTo({ top: 0, behavior: 'smooth' }); loadPaper(idTail(dragging.w.id)); }
+      if (s && Math.hypot(p.x - s.x, p.y - s.y) < 5 && !dragging.center) {
+        if (window.IS_TOUCH && NET.lastTap !== dragging) {
+          // first tap: show the tooltip a mouse user would get on hover
+          NET.lastTap = dragging;
+          const n = dragging;
+          touchTip(`<div class="tt">${esc(n.w.display_name)}</div>
+            <div class="tm">${esc(n.kind)} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''} · tap again to open</div>`, e.clientX, e.clientY);
+        } else {
+          NET.lastTap = null;
+          scrollTo({ top: 0, behavior: 'smooth' }); loadPaper(idTail(dragging.w.id));
+        }
+      }
     }
     dragging = null;
   });
@@ -1921,12 +1987,20 @@ function drawWorld(entries, wid) {
     cv.style.cursor = best ? 'pointer' : 'default';
   });
   cv.addEventListener('pointerleave', tipHide);
+  let lastBubbleTap = null;
   cv.addEventListener('click', e => {
     const r = cv.getBoundingClientRect();
     const p = { x: e.clientX - r.left, y: e.clientY - r.top };
     let best = null;
     for (const b of bubbles) if (Math.hypot(b.x - p.x, b.y - p.y) <= b.r + 3) best = b;
-    if (best && wid) window.open(`https://openalex.org/works?filter=cites:${wid},authorships.countries:${best.cc}`, '_blank', 'noopener');
+    if (!best) return;
+    if (window.IS_TOUCH && lastBubbleTap !== best) {
+      lastBubbleTap = best;
+      touchTip(`<div class="tt">${flag(best.cc)} ${esc(MAPDATA.names[best.cc] || best.cc)}</div><div class="tm">${fmt(best.v)} citing papers${wid ? ' · tap again to see them' : ''}</div>`, e.clientX, e.clientY);
+      return;
+    }
+    lastBubbleTap = null;
+    if (wid) window.open(`https://openalex.org/works?filter=cites:${wid},authorships.countries:${best.cc}`, '_blank', 'noopener');
   });
 }
 

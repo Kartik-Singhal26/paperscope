@@ -138,6 +138,7 @@ function routeFor(url) {
   if (u.includes('group_by=authorships.countries')) return groupCountries;
   if (u.includes('filter=cites:')) return citers;
   if (u.includes('/authors?filter=ids.openalex:')) return authorsBatch;
+  if (u.includes('from_publication_date:') && u.includes('per-page=6')) return { results: Array.from({ length: 6 }, (_, i) => work(`W95${i}`, `Trending banger number ${i}`, 2026, 500 - i * 50, 'Computer Science')), meta: { count: 6 } };
   if (u.includes('sample=1')) return { results: [{ id: 'https://openalex.org/W2741809807' }], meta: { count: 1 } };
   if (u.includes('/works?search=')) return { results: [MAIN], meta: { count: 1 } };
   return null;
@@ -170,6 +171,10 @@ let srcDetail429 = 0;
   });
 
   await page.goto('file:///home/claude/paperscope/index.html');
+  await page.waitForTimeout(800);
+  checks0 = {};
+  checks0.trendingShown = await page.$eval('#trendingWrap', el => el.style.display !== 'none');
+  checks0.trendingCards = await page.$$eval('.tcard', els => els.length);
   await page.screenshot({ path: 'shot_home.png' });
 
   // autocomplete flow
@@ -183,8 +188,9 @@ let srcDetail429 = 0;
   await page.screenshot({ path: process.env.FALLBACK ? 'shot_fallback.png' : 'shot_full.png', fullPage: true });
 
   // checks
-  const checks = {};
+  const checks = Object.assign({}, typeof checks0 !== 'undefined' ? checks0 : {});
   checks.hero = await page.textContent('#hero');
+  checks.trendingHidden = await page.$eval('#trendingWrap', el => el.style.display === 'none');
   checks.rank = await page.textContent('#journal');
   checks.legend = await page.textContent('#netlegend');
   checks.cbars = await page.textContent('#cbars');
@@ -321,6 +327,26 @@ let srcDetail429 = 0;
   await page.waitForSelector('#results.on', { timeout: 8000 });
   await page.waitForTimeout(800);
   checks.luckyHero = (await page.textContent('#hero')).includes('Attention Is All You Need');
+  // ===== touch behavior =====
+  await page.evaluate(() => { window.IS_TOUCH = true; });
+  const tapNode = () => page.evaluate(() => {
+    const cv = document.getElementById('net');
+    const r = cv.getBoundingClientRect();
+    const n = window.NET.nodes[1];
+    const o = { clientX: r.left + n.x, clientY: r.top + n.y, pointerId: 99, bubbles: true };
+    cv.dispatchEvent(new PointerEvent('pointerdown', o));
+    cv.dispatchEvent(new PointerEvent('pointerup', o));
+  });
+  await tapNode();
+  await page.waitForTimeout(250);
+  checks.touchFirstTapTip = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
+  checks.touchNoNav = (await page.textContent('#hero')).includes('Attention');
+  await tapNode();
+  await page.waitForTimeout(1200);
+  checks.touchSecondTapNav = !(await page.textContent('#hero')).includes('Attention');
+  await page.evaluate(() => { window.IS_TOUCH = false; loadPaper('W2741809807'); });
+  await page.waitForTimeout(1000);
+
   // ===== hardening checks =====
   checks.retrySurvived429 = (await page.textContent('#journal')).includes('NeurIPS'); // rank rendered despite one 429
   // cache: reloading the same paper must not refetch (count via route)
