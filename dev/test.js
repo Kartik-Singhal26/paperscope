@@ -143,15 +143,21 @@ function routeFor(url) {
   return null;
 }
 
+let srcDetail429 = 0;
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await ctxB.newPage();
   const errors = [];
-  page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
+  page.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('429')) errors.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
 
   await page.route('**/api.openalex.org/**', async route => {
+    const u0 = decodeURIComponent(route.request().url());
+    if (u0.match(/\/sources\/S1983995261/) && srcDetail429++ === 0) {
+      await route.fulfill({ status: 429, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{}' });
+      return;
+    }
     const fx = routeFor(route.request().url());
     if (fx) await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(fx) });
     else await route.fulfill({ status: 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ error: 'not found' }) });
@@ -315,6 +321,36 @@ function routeFor(url) {
   await page.waitForSelector('#results.on', { timeout: 8000 });
   await page.waitForTimeout(800);
   checks.luckyHero = (await page.textContent('#hero')).includes('Attention Is All You Need');
+  // ===== hardening checks =====
+  checks.retrySurvived429 = (await page.textContent('#journal')).includes('NeurIPS'); // rank rendered despite one 429
+  // cache: reloading the same paper must not refetch (count via route)
+  const hitsBefore = await page.evaluate(() => performance.getEntriesByType('resource').filter(r => r.name.includes('works/W2741809807')).length);
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1200);
+  const hitsAfter = await page.evaluate(() => performance.getEntriesByType('resource').filter(r => r.name.includes('works/W2741809807')).length);
+  checks.cacheHit = hitsAfter === hitsBefore;
+  // physics idles after settling
+  await page.waitForTimeout(4800);
+  checks.physicsIdle = await page.evaluate(() => window.NET.idle === true && window.NET.raf === null);
+  await page.hover('#net');
+  await page.mouse.move(700, 500); // wake via pointermove
+  await page.waitForTimeout(150);
+  checks.physicsWakes = await page.evaluate(() => window.NET.idle === false);
+  // resize redraws the canvas at the new width
+  const wBefore = await page.evaluate(() => document.getElementById('net').width);
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await page.waitForTimeout(600);
+  const wAfter = await page.evaluate(() => document.getElementById('net').width);
+  checks.resizeRedraw = wAfter !== wBefore;
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.waitForTimeout(600);
+  // race: navigate to a paper then immediately to the author — author must win
+  await page.evaluate(() => { loadPaper('W900'); loadAuthor('A5023888391'); });
+  await page.waitForTimeout(2000);
+  checks.raceWinner = (await page.textContent('#hero')).includes('Kartik Singhal');
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1000);
+
   // clickable author names in paper hero
   await page.click('#hero a.au');
   await page.waitForTimeout(1500);

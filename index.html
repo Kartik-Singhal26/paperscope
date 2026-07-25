@@ -388,11 +388,30 @@ const idTail = url => String(url || '').split('/').pop();
 const flag = cc => cc && /^[A-Za-z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
 const PALETTE = ['#3A86FF','#FB5607','#068F6C','#C98A00','#E4569B','#7B2FBF'];
 const API = 'https://api.openalex.org';
+let EPOCH = 0;                                   // bumped on every navigation
+const RESIZERS = new Map();                      // panel -> re-render thunk (cache makes these cheap)
+let resizeT = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { for (const fn of RESIZERS.values()) { try { fn(); } catch (e) {} } }, 250);
+});
+const stale = ep => ep != null && ep !== EPOCH;  // stale loads must not touch the DOM
 
-async function getJSON(url) {
+const API_CACHE = new Map();          // url -> {v, t}; makes revisits instant
+const CACHE_TTL = 10 * 60 * 1000;     // counts can drift; refetch after 10 min
+async function getJSON(url, attempt = 0) {
+  const hit = API_CACHE.get(url);
+  if (hit && Date.now() - hit.t < CACHE_TTL) return hit.v;
   const r = await fetch(url);
+  if (r.status === 429 && attempt < 2) {          // polite backoff on rate limits
+    await new Promise(res => setTimeout(res, 700 * (attempt + 1)));
+    return getJSON(url, attempt + 1);
+  }
   if (!r.ok) throw new Error('HTTP ' + r.status + ' for ' + url.slice(0, 120));
-  return r.json();
+  const v = await r.json();
+  API_CACHE.set(url, { v, t: Date.now() });
+  if (API_CACHE.size > 300) API_CACHE.delete(API_CACHE.keys().next().value);
+  return v;
 }
 /* Try a chain of URLs until one works (endpoint-variant fallbacks). */
 async function getJSONChain(urls) {
@@ -593,16 +612,19 @@ async function runSearch() {
 const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access,fwci,citation_normalized_percentile,biblio';
 
 async function loadPaper(idOrDoi) {
+  const ep = ++EPOCH;
   showLoading('fetching the paper…');
   $('#results').className = '';
   try {
     const w = await getJSON(`${API}/works/${encodeURIComponent(idOrDoi).replace(/%3A/g,':').replace(/%2F/g,'/')}?select=${WORK_SELECT}`);
+    if (stale(ep)) return;
     clearStatus();
     setModeTexts('paper');
     setMode('paper');
     renderHero(w);
     setPermalink(w);
-    enrichSemanticScholar(w); // best-effort second opinion on citations
+    RESIZERS.delete('journey');
+    enrichSemanticScholar(w, ep); // best-effort second opinion on citations
     $('#results').className = 'on';
     // fire the four panels independently — each has its own loading + error state
     $('#netbox').innerHTML = miniLoad('spinning the web…');
@@ -611,11 +633,11 @@ async function loadPaper(idOrDoi) {
     $('#mapbox').innerHTML = miniLoad('spinning the globe…');
     $('#cbars').innerHTML = '';
     $('#acards').innerHTML = miniLoad('interviewing the fans…');
-    panelSafe(buildNetwork(w), '#netbox', 'The map got tangled');
-    panelSafe(buildJournal(w), '#journal', 'Leaderboard unavailable');
+    panelSafe(buildNetwork(w, ep), '#netbox', 'The map got tangled');
+    panelSafe(buildJournal(w, ep), '#journal', 'Leaderboard unavailable');
     const citersP = fetchCiters(w);
-    panelSafe(buildCountries(w, citersP), '#mapbox', 'The globe jammed');
-    panelSafe(buildAuthors(w, citersP), '#acards', 'The crew went quiet');
+    panelSafe(buildCountries(w, citersP, ep), '#mapbox', 'The globe jammed');
+    panelSafe(buildAuthors(w, citersP, ep), '#acards', 'The crew went quiet');
   } catch (e) {
     showError('Could not fetch that paper (' + esc(e.message) + ')');
   }
@@ -629,7 +651,7 @@ function workURL(w) { return w.doi || w.id || '#'; }
 
 /* Second-opinion citation count from Semantic Scholar (free, CORS-open, no key).
    Its corpus is broader than OpenAlex's, so it usually lands closer to Google Scholar. */
-async function enrichSemanticScholar(w) {
+async function enrichSemanticScholar(w, ep) {
   const S2 = 'https://api.semanticscholar.org/graph/v1/paper';
   const fields = 'fields=citationCount,influentialCitationCount';
   try {
@@ -641,6 +663,7 @@ async function enrichSemanticScholar(w) {
       const m = await getJSON(`${S2}/search/match?query=${encodeURIComponent(w.display_name)}&${fields}`);
       j = m.data && m.data[0];
     }
+    if (stale(ep)) return;
     if (j && j.citationCount != null) {
       const b = $('#citeChip');
       if (!b) return;
@@ -693,6 +716,7 @@ function renderHero(w) {
 
 /* ---- citation trend tab: big yearly chart + verdict ---- */
 function renderTrend(w) {
+  RESIZERS.set('trend', () => renderTrend(w));
   const box = $('#trend');
   const cby = (w.counts_by_year || []).slice().sort((a, b) => a.year - b.year).slice(-15);
   if (cby.length < 2) {
@@ -877,10 +901,12 @@ const AUTHOR_SELECT = 'id,display_name,orcid,works_count,cited_by_count,summary_
 const AWORK_SEL = 'id,display_name,publication_year,cited_by_count,referenced_works,primary_topic,doi';
 
 async function loadAuthor(idOrOrcid) {
+  const ep = ++EPOCH;
   showLoading('pulling up the researcher’s file…');
   $('#results').className = '';
   try {
     const a = await getJSON(`${API}/authors/${encodeURIComponent(idOrOrcid).replace(/%3A/g, ':').replace(/%2F/g, '/')}?select=${AUTHOR_SELECT}`);
+    if (stale(ep)) return;
     clearStatus();
     setMode('author');
     setModeTexts('author');
@@ -900,15 +926,15 @@ async function loadAuthor(idOrOrcid) {
     const worksP = getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&sort=cited_by_count:desc&per-page=50&page=1&select=${AWORK_SEL}`)
       .then(j => j.results || []);
     renderTrend(a); // authors carry counts_by_year too
-    panelSafe(buildPortfolio(a, worksP), '#netbox', 'The portfolio got tangled');
-    panelSafe(buildAuthorVenues(a), '#journal', 'Venue list unavailable');
+    panelSafe(buildPortfolio(a, worksP, ep), '#netbox', 'The portfolio got tangled');
+    panelSafe(buildAuthorVenues(a, ep), '#journal', 'Venue list unavailable');
     $('#coauth').innerHTML = miniLoad('rounding up the partners…');
     $('#journey').innerHTML = miniLoad('tracing the journey…');
-    panelSafe(buildCoauthors(a), '#coauth', 'Co-author list unavailable');
-    panelSafe(buildJourney(a), '#journey', 'The trail went cold');
+    panelSafe(buildCoauthors(a, ep), '#coauth', 'Co-author list unavailable');
+    panelSafe(buildJourney(a, ep), '#journey', 'The trail went cold');
     const citersP = fetchAuthorCiters(a, worksP);
-    panelSafe(buildAuthorCountries(a, citersP), '#mapbox', 'The globe jammed');
-    panelSafe(buildAuthorFans(a, citersP), '#acards', 'The fan club went quiet');
+    panelSafe(buildAuthorCountries(a, citersP, ep), '#mapbox', 'The globe jammed');
+    panelSafe(buildAuthorFans(a, citersP, ep), '#acards', 'The fan club went quiet');
   } catch (e) {
     showError('Could not fetch that researcher (' + esc(e.message) + ')');
   }
@@ -953,8 +979,9 @@ function renderAuthorHero(a) {
 }
 
 /* right panel, rank tab: where they publish most */
-async function buildAuthorVenues(a) {
+async function buildAuthorVenues(a, ep) {
   const j = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&group_by=primary_location.source.id`);
+  if (stale(ep)) return;
   const groups = (j.group_by || []).filter(g => g.key && g.key !== 'unknown').slice(0, 8);
   const box = $('#journal');
   if (!groups.length) { box.innerHTML = '<div class="empty">🕵️ No venues on record.</div>'; return; }
@@ -971,8 +998,9 @@ async function buildAuthorVenues(a) {
 }
 
 /* portfolio: their papers as the network */
-async function buildPortfolio(a, worksP) {
+async function buildPortfolio(a, worksP, ep) {
   const works = await worksP;
+  if (stale(ep)) return;
   if (!works.length) { $('#netbox').innerHTML = '<div class="empty">🕳️ No papers on record. A ghost!</div>'; return; }
   if (NET && NET.raf) cancelAnimationFrame(NET.raf);
   $('#netctl').style.display = 'none';
@@ -1002,9 +1030,10 @@ async function buildPortfolio(a, worksP) {
 }
 
 /* co-authors: one group_by, self excluded, enriched */
-async function buildCoauthors(a) {
+async function buildCoauthors(a, ep) {
   const selfId = idTail(a.id);
   const j = await getJSON(`${API}/works?filter=authorships.author.id:${selfId}&group_by=authorships.author.id`);
+  if (stale(ep)) return;
   const raw = (j.group_by || [])
     .map(g => ({ id: idTail(g.key || ''), name: g.key_display_name, n: g.count }))
     .filter(g => g.id && g.id !== selfId && /^A\d+$/.test(g.id));
@@ -1023,6 +1052,7 @@ async function buildCoauthors(a) {
     ]);
     for (const x of (jj.results || [])) enrich[idTail(x.id)] = x;
   } catch (e) {}
+  if (stale(ep)) return;
   const maxV = groups[0].n;
   box.innerHTML = '';
   const wrap = el('div');
@@ -1062,8 +1092,9 @@ async function buildCoauthors(a) {
 }
 
 /* research journey: stacked subfield areas over the years */
-async function buildJourney(a) {
+async function buildJourney(a, ep) {
   const j = await getJSON(`${API}/works?filter=authorships.author.id:${idTail(a.id)}&sort=publication_date:desc&per-page=200&select=id,display_name,publication_year,cited_by_count,doi,primary_topic`);
+  if (stale(ep)) return;
   const works = (j.results || []).filter(x => x.publication_year);
   const total = (j.meta && j.meta.count) || works.length;
   const box = $('#journey');
@@ -1116,6 +1147,7 @@ async function buildJourney(a) {
     ${total > works.length ? `<div class="psub" style="margin-top:8px">Based on their ${works.length} most recent papers (of ${fmt(total)}).</div>` : ''}
     <div id="journeyDetail" style="display:none"></div>
   `;
+  RESIZERS.set('journey', () => { if (MODE === 'author') buildJourney(a); });
   const detail = $('#journeyDetail');
   let selKey = null;
   const closeDetail = () => { selKey = null; detail.style.display = 'none'; detail.innerHTML = ''; box.querySelectorAll('.jcell.sel').forEach(c => c.classList.remove('sel')); };
@@ -1158,7 +1190,7 @@ function fetchAuthorCiters(a, worksP) {
   });
 }
 
-async function buildAuthorCountries(a, citersP) {
+async function buildAuthorCountries(a, citersP, ep) {
   const { works, total, ids, basis } = await citersP;
   let counts = null, usedBasis = '';
   if (ids.length) {
@@ -1187,6 +1219,7 @@ async function buildAuthorCountries(a, citersP) {
     }
     usedBasis = `the ${works.length} most-cited papers citing ${basis}`;
   }
+  if (stale(ep)) return;
   const entries = Object.entries(counts).sort((x, y) => y[1] - x[1]);
   if (!entries.length) { $('#mapbox').innerHTML = '<div class="empty">🌵 No fans located yet — early days!</div>'; $('#cbars').innerHTML = ''; return; }
   $('#mapsub').textContent = 'Author countries across ' + usedBasis + '. Hover the bubbles!';
@@ -1204,8 +1237,9 @@ async function buildAuthorCountries(a, citersP) {
   if (entries.length > 8) cb.appendChild(el('div', 'psub', '+ ' + (entries.length - 8) + ' more countries in the bubbles above'));
 }
 
-async function buildAuthorFans(a, citersP) {
+async function buildAuthorFans(a, citersP, ep) {
   const { works, total, basis } = await citersP;
+  if (stale(ep)) return;
   if (!works.length) { $('#acards').innerHTML = '<div class="empty">🦗 Crickets so far — someone has to be first!</div>'; return; }
   const selfId = idTail(a.id);
   let selfCiting = 0;
@@ -1237,6 +1271,7 @@ async function buildAuthorFans(a, citersP) {
     ]);
     for (const x of (j.results || [])) enrich[idTail(x.id)] = x;
   } catch (e) {}
+  if (stale(ep)) return;
   const box = $('#acards'); box.innerHTML = '';
   top.forEach((t, i) => {
     const e2 = enrich[t.id] || {};
@@ -1292,7 +1327,7 @@ const fieldOf = n => (n.w.primary_topic && ((n.w.primary_topic.subfield && n.w.p
 function netGroup(n) { return NET.shown.includes(fieldOf(n)) ? fieldOf(n) : '__other'; }
 function netColor(n) { const i = NET.shown.indexOf(fieldOf(n)); return i === -1 ? '#8a8578' : PALETTE[i]; }
 
-async function buildNetwork(w) {
+async function buildNetwork(w, ep) {
   if (NET && NET.raf) cancelAnimationFrame(NET.raf);
   NET = null;
   $('#netctl').style.display = 'none';
@@ -1319,6 +1354,7 @@ async function buildNetwork(w) {
   } else jobs.push(Promise.resolve([]));
 
   const [related, topicTop] = await Promise.all(jobs);
+  if (stale(ep)) return;
   const seen = new Set([idTail(w.id)]);
   const nodes = [{ w, center: true, kind: 'this paper' }];
   const relOrder = new Map(relIds.map((id, i) => [id, i]));
@@ -1398,6 +1434,7 @@ function renderNetLegend() {
     b.title = NET.isolated === key ? 'Show every field again' : `Spotlight only ${label} papers`;
     b.addEventListener('click', () => {
       NET.isolated = NET.isolated === key ? null : key;
+      NET.wake && NET.wake();
       renderNetLegend();
     });
     lg.appendChild(b);
@@ -1411,9 +1448,11 @@ async function spawnMore() {
   if (NET && NET.authorId) return toggleAreas();
   if (!NET || !NET.topicId) { mb.disabled = true; mb.textContent = '🤷 No topic to mine'; return; }
   mb.disabled = true; mb.textContent = '✨ conjuring…';
+  const myNet = NET;
   try {
     NET.topicPage++;
     const j = await getJSON(`${API}/works?filter=primary_topic.id:${NET.topicId}&sort=cited_by_count:desc&per-page=9&page=${NET.topicPage}&select=${NET_SEL}`);
+    if (myNet !== NET) return;
     let added = 0;
     for (const r of (j.results || [])) {
       if (NET.nodes.length >= NET_CAP) break;
@@ -1428,6 +1467,7 @@ async function spawnMore() {
       n.vx = 0; n.vy = 0; n.r = 10;
       NET.nodes.push(n); added++;
     }
+    NET.wake && NET.wake();
     resizeNodes();
     computeEdges();
     if (NET.mode === 'time') computeTimeTargets();
@@ -1498,6 +1538,7 @@ $('#timeBtn').addEventListener('click', () => {
   NET.mode = NET.mode === 'time' ? 'force' : 'time';
   $('#timeBtn').classList.toggle('on', NET.mode === 'time');
   $('#timeBtn').textContent = NET.mode === 'time' ? '🕸️ web view' : '🕰️ timeline view';
+  NET.wake && NET.wake();
   if (NET.mode === 'time') computeTimeTargets();
   else {
     // returning to web view: re-anchor the hub and give the orbit a nudge
@@ -1520,6 +1561,7 @@ $('#tableBtn').addEventListener('click', () => {
 });
 
 function drawNetwork() {
+  RESIZERS.set('net', () => { if (NET) { drawNetwork(); if (NET.mode === 'time') computeTimeTargets(); } });
   const box = $('#netbox'); box.innerHTML = '';
   const W = Math.max(380, box.clientWidth || 560), H = 430;
   NET.W = W; NET.H = H;
@@ -1544,14 +1586,17 @@ function drawNetwork() {
 
   let dragging = null, hover = null;
   function physics() {
+    let energy = 0;
     if (NET.mode === 'time') {
       for (const n of nodes) {
         if (n === dragging) continue;
-        n.x += ((n.tx ?? n.x) - n.x) * 0.14;
-        n.y += ((n.ty ?? n.y) - n.y) * 0.14;
-        if (n.fresh) n.fresh--;
+        const dx = (n.tx ?? n.x) - n.x, dy = (n.ty ?? n.y) - n.y;
+        energy += Math.abs(dx) + Math.abs(dy);
+        n.x += dx * 0.14;
+        n.y += dy * 0.14;
+        if (n.fresh) { n.fresh--; energy += 1; }
       }
-      return;
+      return energy > Math.max(1, nodes.length * 0.07) || !!dragging;
     }
     // spring along real citation edges
     for (const e of NET.edges) {
@@ -1577,11 +1622,15 @@ function drawNetwork() {
         const min = n.r + m.r + 14;
         if (rd < min * 1.7) { const p = (min * 1.7 - rd) * 0.012; n.vx += (rx / rd) * p * 8; n.vy += (ry / rd) * p * 8; }
       }
-      n.vx *= 0.86; n.vy *= 0.86;
+      const damp = 0.86 * (NET.frames > 120 ? 0.96 : 1); // friction ramps up so orbits decay
+      n.vx *= damp; n.vy *= damp;
       n.x += n.vx; n.y += n.vy;
       n.x = Math.max(n.r + 6, Math.min(W - n.r - 6, n.x));
       n.y = Math.max(n.r + 6, Math.min(H - n.r - 6, n.y));
+      energy += Math.abs(n.vx) + Math.abs(n.vy);
+      if (n.fresh) energy += 1;
     }
+    return energy > Math.max(1, nodes.length * 0.07) || !!dragging;
   }
   function draw() {
     ctx.clearRect(0, 0, W, H);
@@ -1635,12 +1684,23 @@ function drawNetwork() {
       ctx.globalAlpha = 1;
     }
   }
-  function loop() { physics(); draw(); NET.raf = requestAnimationFrame(loop); }
+  function loop() {
+    NET.frames = (NET.frames || 0) + 1;
+    const moving = physics();
+    draw();
+    NET.calm = moving ? 0 : (NET.calm || 0) + 1;
+    // stop burning frames once settled — or after 4s without interaction regardless
+    if (NET.calm > 45 || NET.frames > 240) { NET.idle = true; NET.raf = null; return; }
+    NET.raf = requestAnimationFrame(loop);
+  }
+  NET.wake = () => { if (NET.idle) { NET.idle = false; NET.calm = 0; NET.frames = 0; loop(); } };
+  NET.idle = false; NET.calm = 0; NET.frames = 0;
   loop();
 
   const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
   const hit = p => nodes.find(n => !dimmed(n) && !(n.center && NET.mode === 'time' && NET.authorId) && Math.hypot(n.x - p.x, n.y - p.y) <= n.r + 4);
   cv.addEventListener('pointermove', e => {
+    NET.wake && NET.wake();
     const p = pos(e);
     if (dragging) { dragging.x = p.x; dragging.y = p.y; dragging.vx = dragging.vy = 0; return; }
     hover = hit(p);
@@ -1651,7 +1711,7 @@ function drawNetwork() {
         <div class="tm">${esc(n.kind)} · ${esc(n.w.publication_year ?? '?')} · ${fmt(n.w.cited_by_count)} citations${n.close != null ? ' · ' + n.close + '% close' : ''}</div>`, e.clientX, e.clientY);
     } else tipHide();
   });
-  cv.addEventListener('pointerdown', e => { const p = pos(e); dragging = hit(p); if (dragging) { cv.setPointerCapture(e.pointerId); dragging.dragStart = { x: p.x, y: p.y }; } });
+  cv.addEventListener('pointerdown', e => { NET.wake && NET.wake(); const p = pos(e); dragging = hit(p); if (dragging) { cv.setPointerCapture(e.pointerId); dragging.dragStart = { x: p.x, y: p.y }; } });
   cv.addEventListener('pointerup', e => {
     if (dragging) {
       const p = pos(e), s = dragging.dragStart;
@@ -1663,7 +1723,7 @@ function drawNetwork() {
 }
 
 /* ============ panel 2: journal rank ============ */
-async function buildJournal(w) {
+async function buildJournal(w, ep) {
   const src = w.primary_location && w.primary_location.source;
   if (!src || !src.id) {
     $('#journal').innerHTML = '<div class="empty">🕵️ This paper has no journal on record (preprint? report? mystery?). No leaderboard today.</div>';
@@ -1701,6 +1761,7 @@ async function buildJournal(w) {
     countRank('h_index', stats.h_index).catch(() => null),
   ]);
 
+  if (stale(ep)) return;
   const box = $('#journal');
   let html = '';
 
@@ -1756,7 +1817,7 @@ function fetchCiters(w) {
 }
 
 /* ============ panel 3: countries map ============ */
-async function buildCountries(w, citersP) {
+async function buildCountries(w, citersP, ep) {
   const wid = idTail(w.id);
   let counts = null, basis = '';
   // primary: server-side group_by over ALL citing works
@@ -1786,6 +1847,7 @@ async function buildCountries(w, citersP) {
     }
     basis = `the ${Math.min(100, total)} most-cited citing papers`;
   }
+  if (stale(ep)) return;
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   if (!entries.length) {
     $('#mapbox').innerHTML = '<div class="empty">🌵 No country data on the citing papers (or nobody has cited it yet — early days!).</div>';
@@ -1813,6 +1875,7 @@ async function buildCountries(w, citersP) {
 }
 
 function drawWorld(entries, wid) {
+  RESIZERS.set('world', () => drawWorld(entries, wid));
   const box = $('#mapbox'); box.innerHTML = '';
   const G = MAPDATA.grid;
   const W = Math.max(380, box.clientWidth || 560);
@@ -1868,8 +1931,9 @@ function drawWorld(entries, wid) {
 }
 
 /* ============ panel 4: citing authors ============ */
-async function buildAuthors(w, citersP) {
+async function buildAuthors(w, citersP, ep) {
   const { works, total } = await citersP;
+  if (stale(ep)) return;
   if (!works.length) {
     $('#acards').innerHTML = '<div class="empty">🦗 Crickets — no citing papers yet. Someone has to be first!</div>';
     return;
@@ -1900,7 +1964,7 @@ async function buildAuthors(w, citersP) {
     ]);
     for (const a of (j.results || [])) enrich[idTail(a.id)] = a;
   } catch (e) { /* cards still render without stats */ }
-
+  if (stale(ep)) return;
   const box = $('#acards'); box.innerHTML = '';
   top.forEach((t, i) => {
     const e2 = enrich[t.id] || {};
