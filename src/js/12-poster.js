@@ -142,6 +142,12 @@ const QR = (() => {
   return { draw };
 })();
 
+/* ---------- text hygiene ---------- */
+// OpenAlex/Crossref titles & reference strings carry inline markup (<scp>, <sub>,
+// <i>, <mml:*> …). We render as plain text, so strip tags before escaping —
+// otherwise they show up literally (e.g. "<scp>d</scp>-2-hydroxy…").
+function stripTags(s) { return String(s ?? '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(); }
+
 /* ---------- abstract intelligence ---------- */
 function invAbstract(inv) {
   if (!inv) return null;
@@ -188,8 +194,8 @@ async function posterData(w) {
   const grants = (extra.funders || []).map(f => f.display_name).filter(Boolean);
   const refs = (refsJ.results || []).map(r => {
     const a1 = r.authorships && r.authorships[0] && r.authorships[0].author && r.authorships[0].author.display_name;
-    const surname = a1 ? a1.split(/\s+/).pop() : null;
-    return `${surname ? surname + (r.authorships.length > 1 ? ' et al.' : '') + ' ' : ''}(${r.publication_year || 'n.d.'}). ${r.display_name}`;
+    const surname = a1 ? stripTags(a1).split(/\s+/).pop() : null;
+    return `${surname ? surname + (r.authorships.length > 1 ? ' et al.' : '') + ' ' : ''}(${r.publication_year || 'n.d.'}). ${stripTags(r.display_name)}`;
   });
   const countries = (ccJ.group_by || [])
     .map(g => [String(g.key || '').replace(/.*\//, '').toUpperCase(), g.count])
@@ -240,10 +246,12 @@ function renderPoster(w, d) {
   const perc = w.citation_normalized_percentile;
   const topPct = perc && perc.value != null ? Math.max(0.1, Math.round((1 - perc.value) * 1000) / 10) : null;
   const sections = d.abstract ? splitAbstract(d.abstract) : null;
+  const numbered = sections && sections.length > 1;   // structured abstract → number the sections
+  const flow = sections && sections.length === 1;     // one long Overview → let it flow across both columns
 
-  const secHTML = (sections || [{ head: 'Overview', body: '' }]).map(s => `
-    <div class="pb-block">
-      <div class="pb-head" contenteditable="true" spellcheck="false">${esc(s.head)}</div>
+  const secHTML = (sections || [{ head: 'Overview', body: '' }]).map((s, i) => `
+    <div class="pb-block pb-sec${flow ? ' pb-flow' : ''}">
+      <div class="pb-head">${numbered ? `<span class="pb-num">${String(i + 1).padStart(2, '0')}</span>` : ''}<span contenteditable="true" spellcheck="false">${esc(s.head)}</span></div>
       <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'OpenAlex doesn’t have this paper’s abstract on record, and PaperScope never invents text. Click here and paste or write your own — you’re probably the author anyway.'}</div>
       ${sections ? '<div class="pb-src">auto-drafted from the public abstract — click any text to edit</div>' : ''}
     </div>`).join('');
@@ -251,7 +259,7 @@ function renderPoster(w, d) {
   board.innerHTML = `
   <div class="poster ${POSTER.theme} ${POSTER.size}" id="posterArt">
     <div class="p-banner">
-      <div class="p-title" contenteditable="true" spellcheck="false">${esc(w.display_name)}</div>
+      <div class="p-title" contenteditable="true" spellcheck="false">${esc(stripTags(w.display_name))}</div>
       <div class="p-authors" contenteditable="true" spellcheck="false">${esc(auths.join(', '))}</div>
       <div class="p-insts" contenteditable="true" spellcheck="false">${esc(insts.slice(0, 4).join(' · ') || '')}</div>
       <div class="p-venue">${esc([venue, w.publication_year].filter(Boolean).join(' · '))}${w.open_access && w.open_access.is_oa ? ` <span class="p-oa">🔓 ${esc((w.open_access.oa_status || 'open') + ' open access')}</span>` : ''}</div>

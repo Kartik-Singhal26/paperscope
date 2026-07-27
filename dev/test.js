@@ -116,7 +116,7 @@ const posterAbstract = 'Background: The dominant sequence transduction models ar
 const POSTER_EXTRA = { abstract_inverted_index: (() => { const inv = {}; posterAbstract.split(' ').forEach((w, i) => { (inv[w] = inv[w] || []).push(i); }); return inv; })(), funders: [{ id: 'https://openalex.org/F1', display_name: 'National Science Foundation' }, { id: 'https://openalex.org/F2', display_name: 'Google Research' }], keywords: [{ display_name: 'Attention mechanism', score: 0.9 }, { display_name: 'Transformer', score: 0.8 }, { display_name: 'Sequence modeling', score: 0.6 }, { display_name: 'Noise keyword', score: 0.1 }] };
 const posterRefs = { results: [
   { id: 'https://openalex.org/W900', display_name: 'Neural machine translation by jointly learning to align and translate', publication_year: 2015, authorships: [{ author: { display_name: 'Dzmitry Bahdanau' } }, { author: { display_name: 'Yoshua Bengio' } }] },
-  { id: 'https://openalex.org/W901', display_name: 'Long short-term memory', publication_year: 1997, authorships: [{ author: { display_name: 'Sepp Hochreiter' } }] },
+  { id: 'https://openalex.org/W901', display_name: 'Long short-term memory of <scp>d</scp>-glucose', publication_year: 1997, authorships: [{ author: { display_name: 'Sepp Hochreiter' } }] },
 ] };
 
 function routeFor(url) {
@@ -557,6 +557,8 @@ let srcDetail429 = 0;
     checks.posterFlags = await page.$eval('.p-flags', el => el.textContent.trim().length > 0);
     checks.posterKeywords = pTxt.includes('Attention mechanism') && pTxt.includes('Transformer') && !pTxt.includes('Noise keyword');
     checks.posterOaBadge = pTxt.includes('gold open access');
+    checks.posterRefsClean = pTxt.includes('d-glucose') && !pTxt.includes('<scp>');
+    checks.posterSectionNums = await page.$$eval('.pb-num', els => els.length) >= 4;  // structured abstract → numbered
   } else {
     checks.posterHonest = pTxt.includes('doesn\u2019t have this paper\u2019s abstract on record');  // honest empty state, never invented text
   }
@@ -574,6 +576,8 @@ let srcDetail429 = 0;
   // theme + size switching rewrites the artboard class and the @page rule
   await page.selectOption('#posterTheme', 'classic');
   checks.posterTheme = await page.$eval('#posterArt', el => el.classList.contains('classic'));
+  await page.selectOption('#posterTheme', 'academic');
+  checks.posterThemeAcademic = await page.$eval('#posterArt', el => el.classList.contains('academic'));
   await page.selectOption('#posterSize', 'a0l');
   checks.posterSizeCls = await page.$eval('#posterArt', el => el.classList.contains('a0l'));
   checks.posterPageRule = await page.$eval('#posterPageStyle', el => el.textContent.includes('1189mm 841mm'));
