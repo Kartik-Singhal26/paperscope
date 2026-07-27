@@ -232,6 +232,17 @@ let srcDetail429 = 0;
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   });
 
+  await page.route('**/api.unpaywall.org/**', async route => {
+    const oa = route.request().url().includes('10.1000/W2741809807'); // MAIN
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+      body: JSON.stringify(oa ? { is_oa: true, oa_status: 'green', best_oa_location: { url: 'https://repo.example.org/paper', url_for_pdf: 'https://repo.example.org/paper.pdf', host_type: 'repository' } } : { is_oa: false, best_oa_location: null }) });
+  });
+  await page.route('**/huggingface.co/**', async route => {
+    const has = route.request().url().includes('/api/papers/1706.03762');
+    await route.fulfill({ status: has ? 200 : 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+      body: has ? JSON.stringify({ title: 'Attention', numTotalModels: 1234, numTotalDatasets: 30, numTotalSpaces: 100 }) : '{}' });
+  });
+
   const INDEX = process.env.PS_INDEX || '/home/claude/paperscope/index.html';
   await page.goto('file://' + INDEX);
   await page.waitForTimeout(800);
@@ -304,6 +315,14 @@ let srcDetail429 = 0;
   checks.s2Fallback = await page.evaluate(() => s2Abstract({ doi: null, locations: [{ source: { display_name: 'arXiv' }, landing_page_url: 'https://arxiv.org/abs/2020.00001', pdf_url: 'https://arxiv.org/pdf/2020.00001' }] }).then(r => (r ? r.src + '::' + r.text.slice(0, 15) : 'null')).catch(e => 'ERR ' + e.message));
   checks.s2FallbackReal = /^the arXiv record::This preprint/.test(checks.s2Fallback || '');
   checks.s2FallbackNull = await page.evaluate(() => s2Abstract({ doi: 'https://doi.org/10.1/closed', locations: [] }).then(r => r === null).catch(() => false));
+  // Hugging Face code/models pill (successor to Papers with Code) for arXiv papers
+  await page.waitForTimeout(600);
+  checks.hfPill = await page.getAttribute('#morePills a', 'href');
+  checks.hfPillReal = /huggingface\.co\/papers\/1706\.03762$/.test(checks.hfPill || '') && (await page.textContent('#morePills')).includes('model');
+  // Unpaywall priority: its clean OA copy beats OpenAlex's low-quality mirror; arXiv still wins over both
+  checks.upwWins = await page.evaluate(() => computeLinks({ open_access: { is_oa: true, oa_status: 'green', oa_url: 'http://mirror.bad/x' }, best_oa_location: { landing_page_url: 'http://mirror.bad/x' }, _upw: { pdf: 'https://good.repo/paper.pdf', landing: 'https://good.repo/paper' }, locations: [] }).oaLink) === 'https://good.repo/paper.pdf';
+  checks.upwPdfPill = await page.evaluate(() => computeLinks({ open_access: { is_oa: true }, _upw: { pdf: 'https://good.repo/p.pdf' }, locations: [] }).pdf) === 'https://good.repo/p.pdf';
+  checks.arxivBeatsUpw = await page.evaluate(() => computeLinks({ open_access: { is_oa: true }, _upw: { pdf: 'https://good.repo/p.pdf' }, locations: [{ source: { display_name: 'arXiv' }, landing_page_url: 'https://arxiv.org/abs/1234.5678' }] }).oaLink) === 'https://arxiv.org/abs/1234.5678';
   await page.click('#bibBtn');
   await page.waitForTimeout(300);
   checks.bibHero = (await page.evaluate(() => navigator.clipboard.readText())).slice(0, 60);
