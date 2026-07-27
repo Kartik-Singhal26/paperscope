@@ -17,7 +17,12 @@ const MAIN = {
   related_works: Array.from({ length: 10 }, (_, i) => `https://openalex.org/W90${i}`),
   referenced_works: ['https://openalex.org/W900', 'https://openalex.org/W901'],
   counts_by_year: Array.from({ length: 9 }, (_, i) => ({ year: 2018 + i, cited_by_count: [500, 1500, 4000, 9000, 16000, 26000, 30000, 34000, 12000][i] })),
-  open_access: { is_oa: true, oa_status: 'gold', oa_url: 'https://arxiv.org/abs/1706.03762' },
+  open_access: { is_oa: true, oa_status: 'gold', oa_url: 'http://mirror.example.cn/bad/copy' },
+  locations: [
+    { source: { display_name: 'NeurIPS' }, landing_page_url: 'https://doi.org/10.1000/W2741809807', pdf_url: null },
+    { source: { display_name: 'arXiv (Cornell University)' }, landing_page_url: 'http://arxiv.org/abs/1706.03762', pdf_url: 'https://arxiv.org/pdf/1706.03762' },
+  ],
+  best_oa_location: { landing_page_url: 'http://mirror.example.cn/bad/copy', pdf_url: 'http://mirror.example.cn/bad/copy.pdf' },
   fwci: 208.6, citation_normalized_percentile: { value: 0.9999, is_in_top_1_percent: true, is_in_top_10_percent: true },
   biblio: { volume: '30', first_page: '5998', last_page: '6008' },
 };
@@ -220,7 +225,10 @@ let srcDetail429 = 0;
 
   await page.route('**/api.semanticscholar.org/**', async route => {
     const u = route.request().url();
-    const body = u.includes('/DOI:') ? { citationCount: 94, influentialCitationCount: 6 } : { data: [{ citationCount: 94, influentialCitationCount: 6 }] };
+    let body;
+    if (u.includes('fields=abstract')) body = u.includes('arXiv:2020.00001') ? { abstract: 'This preprint introduces a genuinely novel method, with the real abstract pulled from the arXiv record via Semantic Scholar for machine testing.' } : { abstract: null };
+    else if (u.includes('/DOI:')) body = { citationCount: 94, influentialCitationCount: 6 };
+    else body = { data: [{ citationCount: 94, influentialCitationCount: 6 }] };
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   });
 
@@ -261,7 +269,8 @@ let srcDetail429 = 0;
   checks.leaderLink = await page.getAttribute('.bars .brow .nm a', 'href');
   checks.countryLink = await page.getAttribute('#cbars a.brow', 'href');
   checks.instLink = await page.getAttribute('.acard .inst a', 'href');
-  checks.gsLink = await page.getAttribute('.toolbar a.tool:nth-of-type(2)', 'href');
+  checks.gsLink = await page.getAttribute('.toolbar a[title*="Google Scholar"]', 'href');
+  checks.gsLinkOk = /scholar\.google\.com\/scholar\?q=/.test(checks.gsLink || '');
   const netCanvas = await page.$('#net'); checks.netCanvas = !!netCanvas;
   const mapCanvas = await page.$('#worldmap'); checks.mapCanvas = !!mapCanvas;
 
@@ -286,6 +295,15 @@ let srcDetail429 = 0;
   checks.percBadge = heroTxt.includes('top 1%');
   checks.oaTierChip = heroTxt.includes('gold open access');
   checks.oaChipLink = await page.getAttribute('.chip.oa', 'href');
+  // OA chip must prefer the clean arXiv copy over OpenAlex's low-quality mirror
+  checks.oaChipPrefersArxiv = /^https:\/\/arxiv\.org\/abs\/1706\.03762/.test(checks.oaChipLink || '') && !/mirror\.example/.test(checks.oaChipLink || '');
+  checks.arxivPill = await page.getAttribute('.toolbar a[title*="arXiv"]', 'href');
+  checks.arxivPillHttps = /^https:\/\/arxiv\.org\/abs\/1706\.03762$/.test(checks.arxivPill || '');
+  checks.originalPill = await page.getAttribute('.toolbar a.tool', 'href');
+  // arXiv/Semantic Scholar abstract fallback (CORS-open) — real text only, null for closed papers
+  checks.s2Fallback = await page.evaluate(() => s2Abstract({ doi: null, locations: [{ source: { display_name: 'arXiv' }, landing_page_url: 'https://arxiv.org/abs/2020.00001', pdf_url: 'https://arxiv.org/pdf/2020.00001' }] }).then(r => (r ? r.src + '::' + r.text.slice(0, 15) : 'null')).catch(e => 'ERR ' + e.message));
+  checks.s2FallbackReal = /^the arXiv record::This preprint/.test(checks.s2Fallback || '');
+  checks.s2FallbackNull = await page.evaluate(() => s2Abstract({ doi: 'https://doi.org/10.1/closed', locations: [] }).then(r => r === null).catch(() => false));
   await page.click('#bibBtn');
   await page.waitForTimeout(300);
   checks.bibHero = (await page.evaluate(() => navigator.clipboard.readText())).slice(0, 60);
