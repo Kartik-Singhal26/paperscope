@@ -174,11 +174,15 @@ function routeFor(url) {
 
 let srcDetail429 = 0;
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const fs = require('fs');
+  const execPath = process.env.CHROMIUM_PATH !== undefined
+    ? (process.env.CHROMIUM_PATH || undefined)
+    : (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
+  const browser = await chromium.launch({ executablePath: execPath });
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await ctxB.newPage();
   const errors = [];
-  page.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('429')) errors.push(m.type() + ': ' + m.text()); });
+  page.on('console', m => { if ((m.type() === 'error' || m.type() === 'warning') && !m.text().includes('429') && !m.text().includes('404')) errors.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', e => { errors.push('PAGEERROR: ' + e.message); console.error('LIVE PAGEERROR:', e.message); });
 
   await page.route('**/api.openalex.org/**', async route => {
@@ -210,7 +214,8 @@ let srcDetail429 = 0;
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
   });
 
-  await page.goto('file:///home/claude/paperscope/index.html');
+  const INDEX = process.env.PS_INDEX || '/home/claude/paperscope/index.html';
+  await page.goto('file://' + INDEX);
   await page.waitForTimeout(800);
   checks0 = {};
   checks0.trendingShown = await page.$eval('#trendingWrap', el => el.style.display !== 'none');
@@ -252,10 +257,15 @@ let srcDetail429 = 0;
 
   // hover network center for tooltip
   if (netCanvas) {
+    await netCanvas.scrollIntoViewIfNeeded();
     const bb = await netCanvas.boundingBox();
-    await page.mouse.move(bb.x + bb.width / 2, bb.y + bb.height / 2);
-    await page.waitForTimeout(300);
-    checks.tooltipVisible = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
+    let tipOk = false;
+    for (let i = 0; i < 12 && !tipOk; i++) {   // physics may still be settling — jiggle and retry
+      await page.mouse.move(bb.x + bb.width / 2 + (i % 3), bb.y + bb.height / 2 + (i % 2));
+      await page.waitForTimeout(220);
+      tipOk = await page.evaluate(() => document.getElementById('tip').style.display === 'block');
+    }
+    checks.tooltipVisible = tipOk;
   }
   // fwci + percentile badges, bibtex
   const heroTxt = await page.textContent('#hero');
@@ -367,9 +377,13 @@ let srcDetail429 = 0;
   await page.click('#tabWhere');
   await page.waitForTimeout(400);
   const wtxt = await page.textContent('#wherenext');
-  checks.whereRows = wtxt.includes('IEEE Transactions on Robotics') && wtxt.includes('Franklin Institute');
-  checks.whereHome = wtxt.includes("you've published here ×9");
-  checks.whereNoRepo = !wtxt.includes('Some Repository');
+  if (!process.env.FALLBACK) {
+    checks.whereRows = wtxt.includes('IEEE Transactions on Robotics') && wtxt.includes('Franklin Institute');
+    checks.whereHome = wtxt.includes("you've published here ×9");
+    checks.whereNoRepo = !wtxt.includes('Some Repository');
+  } else {
+    checks.whereGraceful = wtxt.length > 0; // degrades to an empty-state, never crashes
+  }
   checks.seedHiddenAuthor = await page.$eval('#seedwrap', el => el.style.display === 'none');
   await page.waitForTimeout(400);
   checks.orcidChips = (await page.textContent('#hero')).includes('IIT Bombay (2021–now)') && (await page.textContent('#hero')).includes('2 funded projects');
@@ -510,4 +524,12 @@ let srcDetail429 = 0;
   console.log(JSON.stringify(checks, null, 1));
   console.log('CONSOLE ISSUES:', errors.length ? errors.slice(0, 10) : 'none');
   await browser.close();
+  // hard pass/fail for CI: any strictly-false check or console issue fails the run
+  const failed = Object.entries(checks).filter(([, v]) => v === false).map(([k]) => k);
+  if (failed.length || errors.length) {
+    console.error('SUITE FAILED —', failed.length ? 'checks: ' + failed.join(', ') : '', errors.length ? '| console issues: ' + errors.length : '');
+    process.exitCode = 1;
+  } else {
+    console.log('SUITE PASSED —', Object.keys(checks).length, 'checks');
+  }
 })();

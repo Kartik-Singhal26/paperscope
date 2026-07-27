@@ -47,8 +47,22 @@ if (stray.length) throw new Error('modules not in MANIFEST: ' + stray.join(', ')
 const crypto = require('crypto');
 const pkg = JSON.parse(read(path.join(__dirname, 'package.json')));
 const srcHash = crypto.createHash('sha256').update(template + styles + mapdata + script).digest('hex').slice(0, 8);
-const versionStr = `v${pkg.version} · ${pkg.versionDate} · build ${srcHash}`;
-const out = template.replace('__STYLES__', () => styles).replace('__SCRIPT__', () => script).replace('__VERSION__', () => versionStr);
+
+// Channel: 'prod' unless overridden. Local/committed builds are ALWAYS prod-stamped
+// (keeps the committed artifact deterministic); Cloudflare preview builds of
+// non-main branches (WORKERS_CI_BRANCH) and explicit CHANNEL=dev builds get the
+// dev stamp + ribbon.
+const ciBranch = process.env.WORKERS_CI_BRANCH || '';
+const channel = process.env.CHANNEL || (ciBranch && ciBranch !== 'main' ? 'dev' : 'prod');
+const versionStr = channel === 'prod'
+  ? `v${pkg.version} · ${pkg.versionDate} · build ${srcHash}`
+  : `v${pkg.version}-dev${ciBranch ? ' · ' + ciBranch : ''} · build ${srcHash}`;
+
+let out = template.replace('__STYLES__', () => styles).replace('__SCRIPT__', () => script).replace('__VERSION__', () => versionStr);
+if (channel !== 'prod') {
+  const ribbon = `<div style="position:fixed;top:14px;right:-44px;z-index:999;transform:rotate(35deg);background:#FB5607;color:#fff;border:3px solid #141414;font:900 13px system-ui;padding:6px 48px;box-shadow:3px 3px 0 #141414;pointer-events:none">🚧 DEV BUILD</div>`;
+  out = out.replace('</body>', ribbon + '\n</body>');
+}
 fs.writeFileSync(path.join(__dirname, 'index.html'), out);
 // clean deploy dir: just the app + the OG image
 const dist = path.join(__dirname, 'dist');
@@ -58,4 +72,4 @@ for (const extra of ['docs_screenshot.png']) {
   const src2 = path.join(__dirname, extra);
   if (fs.existsSync(src2)) fs.copyFileSync(src2, path.join(dist, extra));
 }
-console.log('built index.html + dist/ —', out.length, 'bytes from', MANIFEST.length, 'modules');
+console.log(`built index.html + dist/ (${channel}) —`, out.length, 'bytes from', MANIFEST.length, 'modules');
