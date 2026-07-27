@@ -2,6 +2,8 @@
 const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,locations,best_oa_location,related_works,doi,open_access,fwci,citation_normalized_percentile,biblio';
 
 const https = u => u ? String(u).replace(/^http:\/\//, 'https://') : u;
+const UNPAYWALL_EMAIL = 'unpaywall@paperscope.net';   // Unpaywall wants a contact email (not a secret key)
+
 // arXiv shows up as one of a work's locations (source name "arXiv"); expose its abs page + PDF.
 function arxivLoc(w) {
   const l = (w.locations || []).find(x => x && x.source && /arxiv/i.test(x.source.display_name || ''));
@@ -9,12 +11,62 @@ function arxivLoc(w) {
   const id = ((l.landing_page_url || l.pdf_url || '').match(/(\d{4}\.\d{4,5})(v\d+)?/) || [])[1];
   return { abs: https(l.landing_page_url) || (id ? `https://arxiv.org/abs/${id}` : null), pdf: https(l.pdf_url) || (id ? `https://arxiv.org/pdf/${id}` : null), id };
 }
-// best free full-text: arXiv PDF first (clean), else OpenAlex's best OA copy.
-function freePdf(w) {
+// Resolve the best free-to-read links for a work. Priority: arXiv (cleanest) →
+// Unpaywall's best OA copy (w._upw, filled in async) → OpenAlex's own OA fields.
+function computeLinks(w) {
+  const oaInfo = w.open_access || {};
   const ax = arxivLoc(w);
-  if (ax && ax.pdf) return ax.pdf;
+  const upw = w._upw || {};
   const b = w.best_oa_location;
-  return b ? (https(b.pdf_url) || https(b.landing_page_url)) : null;
+  const pdf = (ax && ax.pdf) || upw.pdf || (b && (https(b.pdf_url) || https(b.landing_page_url))) || null;
+  const oaLink = (ax && ax.abs) || upw.pdf || upw.landing || (b && https(b.landing_page_url)) || https(oaInfo.oa_url) || null;
+  return { oa: oaInfo.is_oa, ax, pdf, oaLink,
+    oaTier: oaInfo.is_oa ? ((oaInfo.oa_status && oaInfo.oa_status !== 'closed' ? oaInfo.oa_status + ' ' : '') + 'open access') : '' };
+}
+function oaChipHTML(L) {
+  if (!L.oa) return '';
+  return L.oaLink
+    ? `<a class="chip oa" id="oaChip" href="${esc(L.oaLink)}" target="_blank" rel="noopener" title="Free to read — ${esc(L.oaTier)}. Click to open the free copy.">🔓 ${esc(L.oaTier)} ↗</a>`
+    : `<span class="chip oa" id="oaChip" title="Free to read — ${esc(L.oaTier)}">🔓 ${esc(L.oaTier)}</span>`;
+}
+function freePillsHTML(L) {
+  return (L.ax && L.ax.abs ? `<a class="tool" href="${esc(L.ax.abs)}" target="_blank" rel="noopener" title="Open the arXiv preprint page">📚 arXiv ↗</a>` : '')
+    + (!L.ax && L.pdf ? `<a class="tool" href="${esc(L.pdf)}" target="_blank" rel="noopener" title="Open the free full-text PDF (open access)">📥 PDF ↗</a>` : '');
+}
+function updateLinks(w) {
+  const L = computeLinks(w);
+  const oaWrap = $('#oaWrap'); if (oaWrap) oaWrap.innerHTML = oaChipHTML(L);
+  const fp = $('#freePills'); if (fp) fp.innerHTML = freePillsHTML(L);
+}
+
+/* Async enrichment after the hero renders — two free, keyless, CORS-open sources:
+   · Unpaywall → the cleanest open-access copy (better than OpenAlex's oa_url mirror)
+   · Hugging Face papers → linked code/models/datasets (the successor to Papers with Code,
+     which shut down in 2025). Only ever real links; absent → no pill. */
+async function enrichLinks(w, ep) {
+  if (w.doi) {
+    try {
+      const doi = w.doi.replace('https://doi.org/', '');
+      const u = await getJSON(`https://api.unpaywall.org/v2/${encodeURIComponent(doi)}?email=${UNPAYWALL_EMAIL}`);
+      if (!stale(ep) && u && u.is_oa && u.best_oa_location) {
+        w._upw = { pdf: https(u.best_oa_location.url_for_pdf), landing: https(u.best_oa_location.url) };
+        updateLinks(w);
+      }
+    } catch (e) { /* leave OpenAlex links as-is */ }
+  }
+  const ax = arxivLoc(w);
+  if (ax && ax.id) {
+    try {
+      const h = await getJSON(`https://huggingface.co/api/papers/${ax.id}`);
+      if (stale(ep)) return;
+      const m = h.numTotalModels || 0, d = h.numTotalDatasets || 0, s = h.numTotalSpaces || 0;
+      if (m + d + s > 0) {
+        const bits = [m && `${fmt(m)} model${m > 1 ? 's' : ''}`, d && `${fmt(d)} dataset${d > 1 ? 's' : ''}`, s && `${fmt(s)} space${s > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+        const mp = $('#morePills');
+        if (mp) mp.innerHTML = `<a class="tool" href="https://huggingface.co/papers/${esc(ax.id)}" target="_blank" rel="noopener" title="Code, models & datasets linked to this paper on Hugging Face — the successor to Papers with Code">🤗 ${esc(bits)} ↗</a>`;
+      }
+    } catch (e) { /* not on HF → no pill */ }
+  }
 }
 
 async function loadPaper(idOrDoi) {
@@ -34,6 +86,7 @@ async function loadPaper(idOrDoi) {
     setPermalink(w);
     RESIZERS.delete('journey');
     enrichSemanticScholar(w, ep); // best-effort second opinion on citations
+    enrichLinks(w, ep);           // best-effort Unpaywall (clean OA copy) + Hugging Face (code & models)
     $('#results').className = 'on';
     // fire the four panels independently — each has its own loading + error state
     $('#netbox').innerHTML = miniLoad('spinning the web…');
@@ -90,18 +143,7 @@ function renderHero(w) {
     : esc(a.display_name)).join(', ') + (auths.length > 8 ? ' + ' + (auths.length - 8) + ' more' : '');
   const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
   const topic = w.primary_topic && w.primary_topic.display_name;
-  const oaInfo = w.open_access || {};
-  const oa = oaInfo.is_oa;
-  const ax = arxivLoc(w);
-  const pdf = freePdf(w);
-  const oaTier = oa ? (oaInfo.oa_status && oaInfo.oa_status !== 'closed' ? oaInfo.oa_status + ' ' : '') + 'open access' : '';
-  // prefer arXiv abs, then OpenAlex's best OA landing, then oa_url (which can be a low-quality mirror)
-  const oaLink = (ax && ax.abs) || (w.best_oa_location && https(w.best_oa_location.landing_page_url)) || https(oaInfo.oa_url);
-  const oaChip = oa
-    ? (oaLink
-      ? `<a class="chip oa" href="${esc(oaLink)}" target="_blank" rel="noopener" title="Free to read — ${esc(oaTier)}. Click to open the free copy.">🔓 ${esc(oaTier)} ↗</a>`
-      : `<span class="chip oa" title="Free to read — ${esc(oaTier)}">🔓 ${esc(oaTier)}</span>`)
-    : '';
+  const L = computeLinks(w);
   $('#hero').innerHTML = `
     <div class="sticker">UNDER THE SCOPE</div>
     <h2>${esc(w.display_name)}</h2>
@@ -110,7 +152,7 @@ function renderHero(w) {
       <span class="chip y">📅 ${esc(w.publication_year ?? '—')}</span>
       <span class="chip c" id="citeChip" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows more — it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations</span>
       ${percChip(w)}
-      ${oaChip}
+      <span id="oaWrap">${oaChipHTML(L)}</span>
     </div>
     <div class="meta-row">
       ${venue ? `<a class="chip v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
@@ -118,9 +160,9 @@ function renderHero(w) {
     </div>
     <div class="toolbar">
       <a class="tool" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
-      ${ax && ax.abs ? `<a class="tool" href="${esc(ax.abs)}" target="_blank" rel="noopener" title="Open the arXiv preprint page">📚 arXiv ↗</a>` : ''}
-      ${!ax && pdf ? `<a class="tool" href="${esc(pdf)}" target="_blank" rel="noopener" title="Open the free full-text PDF (open access)">📥 PDF ↗</a>` : ''}
+      <span id="freePills">${freePillsHTML(L)}</span>
       <a class="tool" target="_blank" rel="noopener" href="https://scholar.google.com/scholar?q=${encodeURIComponent(w.doi ? w.doi.replace('https://doi.org/','') : '"' + w.display_name + '"')}" title="Open this paper on Google Scholar — Scholar has no API, so its count can't be shown here.">🎓 Scholar ↗</a>
+      <span id="morePills"></span>
       <button class="tool" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
       <button class="tool" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
       <button class="tool" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>

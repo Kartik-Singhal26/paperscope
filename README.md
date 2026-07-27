@@ -21,6 +21,8 @@ Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose
 
 Where OpenAlex is missing a paper's abstract, the Poster Studio falls back to the **arXiv / Semantic Scholar** record for the real abstract (arXiv's own API blocks browser requests, so Semantic Scholar — which indexes arXiv and is CORS-open — is used); it returns nothing for genuinely closed papers, so no text is ever invented.
 
+Two more free, keyless sources enrich each paper after it loads: **Unpaywall** supplies the cleanest open-access copy (used ahead of OpenAlex's own OA link, behind arXiv), and **Hugging Face** surfaces the linked code, models, and datasets for arXiv papers as a 🤗 pill — the role Papers with Code filled before it shut down in 2025. Both appear only when there's real data to show.
+
 ![screenshot](docs_screenshot.png)
 
 ## Run it
