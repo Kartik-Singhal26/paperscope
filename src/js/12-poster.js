@@ -174,7 +174,7 @@ const POSTER = { w: null, size: 'a0p', theme: 'brutal' };
 async function posterData(w) {
   const wid = idTail(w.id);
   const [extra, refsJ, ccJ] = await Promise.all([
-    getJSON(`${API}/works/${wid}?select=abstract_inverted_index,grants`).catch(() => ({})),
+    getJSON(`${API}/works/${wid}?select=abstract_inverted_index,keywords,funders`).catch(() => ({})),
     (w.referenced_works || []).length
       ? getJSONChain([
           `${API}/works?filter=ids.openalex:${w.referenced_works.slice(0, 8).map(idTail).join('|')}&per-page=8&select=id,display_name,publication_year,authorships`,
@@ -184,7 +184,8 @@ async function posterData(w) {
     getJSON(`${API}/works?filter=cites:${wid}&group_by=authorships.countries`).catch(() => ({ group_by: [] })),
   ]);
   const abstract = invAbstract(extra.abstract_inverted_index);
-  const grants = (extra.grants || []).map(g => g.funder_display_name).filter(Boolean);
+  const keywords = (extra.keywords || []).filter(k => k.score == null || k.score > 0.3).slice(0, 8).map(k => k.display_name).filter(Boolean);
+  const grants = (extra.funders || []).map(f => f.display_name).filter(Boolean);
   const refs = (refsJ.results || []).map(r => {
     const a1 = r.authorships && r.authorships[0] && r.authorships[0].author && r.authorships[0].author.display_name;
     const surname = a1 ? a1.split(/\s+/).pop() : null;
@@ -194,7 +195,7 @@ async function posterData(w) {
     .map(g => [String(g.key || '').replace(/.*\//, '').toUpperCase(), g.count])
     .filter(([cc]) => /^[A-Z]{2}$/.test(cc))
     .sort((a, b) => b[1] - a[1]);
-  return { abstract, grants, refs, countries };
+  return { abstract, keywords, grants, refs, countries };
 }
 
 /* ---------- studio ---------- */
@@ -243,7 +244,7 @@ function renderPoster(w, d) {
   const secHTML = (sections || [{ head: 'Overview', body: '' }]).map(s => `
     <div class="pb-block">
       <div class="pb-head" contenteditable="true" spellcheck="false">${esc(s.head)}</div>
-      <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'This paper’s abstract isn’t public (closed access). Click here and paste or write your own — you’re probably the author anyway.'}</div>
+      <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'OpenAlex doesn’t have this paper’s abstract on record, and PaperScope never invents text. Click here and paste or write your own — you’re probably the author anyway.'}</div>
       ${sections ? '<div class="pb-src">auto-drafted from the public abstract — click any text to edit</div>' : ''}
     </div>`).join('');
 
@@ -253,10 +254,11 @@ function renderPoster(w, d) {
       <div class="p-title" contenteditable="true" spellcheck="false">${esc(w.display_name)}</div>
       <div class="p-authors" contenteditable="true" spellcheck="false">${esc(auths.join(', '))}</div>
       <div class="p-insts" contenteditable="true" spellcheck="false">${esc(insts.slice(0, 4).join(' · ') || '')}</div>
-      <div class="p-venue">${esc([venue, w.publication_year].filter(Boolean).join(' · '))}</div>
+      <div class="p-venue">${esc([venue, w.publication_year].filter(Boolean).join(' · '))}${w.open_access && w.open_access.is_oa ? ` <span class="p-oa">🔓 ${esc((w.open_access.oa_status || 'open') + ' open access')}</span>` : ''}</div>
     </div>
     <div class="p-cols">
       <div class="p-main">
+        ${d.keywords.length ? `<div class="p-kws" contenteditable="true" spellcheck="false">${d.keywords.map(k => `<span class="p-kw">${esc(k)}</span>`).join(' ')}</div>` : ''}
         ${secHTML}
         <div class="pb-block p-figslot">
           <button class="p-addfig" type="button">🖼️ add a figure from your files</button>

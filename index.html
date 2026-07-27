@@ -427,6 +427,10 @@
   .p-qr span{display:block; font-size:4.2mm; font-weight:800; margin-top:2mm; text-transform:uppercase; letter-spacing:.4mm;}
   .p-credit{font-size:4.5mm; font-weight:800; text-align:center; opacity:.75; padding:3mm 0 0;}
 
+  .p-kws{display:flex; flex-wrap:wrap; gap:3mm; flex:none;}
+  .p-kw{display:inline-block; font-size:5mm; font-weight:800; padding:1.5mm 4mm; border:.8mm solid var(--ink); background:#fff; text-transform:lowercase;}
+  .p-oa{font-weight:900; white-space:nowrap;}
+
   /* --- theme: neo-brutal (matches the app) --- */
   .poster.brutal{background:var(--paper);}
   .poster.brutal .p-banner{background:var(--c1); color:#fff; border-bottom:2mm solid var(--ink);}
@@ -436,6 +440,8 @@
   .poster.brutal .p-main .pb-block:nth-child(3n) .pb-head{color:var(--c3);}
   .poster.brutal .p-main .pb-block:nth-child(3n+1) .pb-head{color:var(--c1);}
   .poster.brutal .p-stat{background:var(--lime); box-shadow:1.5mm 1.5mm 0 var(--ink);}
+  .poster.brutal .p-kw{box-shadow:1.2mm 1.2mm 0 var(--ink); background:var(--sky);}
+  .poster.brutal .p-oa{color:var(--lime);}
 
   /* --- theme: classic (serif, conference-safe) --- */
   .poster.classic{font-family:Georgia,'Times New Roman',serif; background:#fff;}
@@ -446,6 +452,8 @@
   .poster.classic .p-stat{border-color:#1d3557; background:#f1faee;}
   .poster.classic .p-addfig,.poster.classic .p-fig img,.poster.classic .p-qr canvas{border-color:#1d3557;}
   .poster.classic .p-figslot{border-color:#1d3557 !important;}
+  .poster.classic .p-kw{border-color:#1d3557; background:#f1faee;}
+  .poster.classic .p-oa{color:#a8dadc;}
 
   /* --- theme: minimal (mono, lots of air) --- */
   .poster.minimal{background:#fff;}
@@ -454,6 +462,7 @@
   .poster.minimal .pb-head{font-size:7mm; border-bottom:.8mm solid var(--ink); padding-bottom:2mm;}
   .poster.minimal .p-stat{border-width:.6mm;}
   .poster.minimal .p-figslot{border:.6mm dashed var(--ink) !important; padding:8mm !important;}
+  .poster.minimal .p-kw{border-width:.5mm;}
 
   /* --- print: only the poster, unscaled --- */
   @media print{
@@ -602,7 +611,7 @@
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
     <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
-    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.1.0 · 2026-07-27 · build 2f8fc8b0</a></span>
+    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.1.0 · 2026-07-27 · build e46fc1db</a></span>
   </footer>
 </div>
 <div id="tip"></div>
@@ -985,7 +994,14 @@ function renderHero(w) {
     : esc(a.display_name)).join(', ') + (auths.length > 8 ? ' + ' + (auths.length - 8) + ' more' : '');
   const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
   const topic = w.primary_topic && w.primary_topic.display_name;
-  const oa = w.open_access && w.open_access.is_oa;
+  const oaInfo = w.open_access || {};
+  const oa = oaInfo.is_oa;
+  const oaTier = oa ? (oaInfo.oa_status && oaInfo.oa_status !== 'closed' ? oaInfo.oa_status + ' ' : '') + 'open access' : '';
+  const oaChip = oa
+    ? (oaInfo.oa_url
+      ? `<a class="chip oa" href="${esc(oaInfo.oa_url)}" target="_blank" rel="noopener" title="Free to read — ${esc(oaTier)}. Click to open the free copy.">🔓 ${esc(oaTier)} ↗</a>`
+      : `<span class="chip oa" title="Free to read — ${esc(oaTier)}">🔓 ${esc(oaTier)}</span>`)
+    : '';
   $('#hero').innerHTML = `
     <div class="sticker">UNDER THE SCOPE</div>
     <h2>${esc(w.display_name)}</h2>
@@ -994,7 +1010,7 @@ function renderHero(w) {
       <span class="chip y">📅 ${esc(w.publication_year ?? '—')}</span>
       <span class="chip c" id="citeChip" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows more — it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations</span>
       ${percChip(w)}
-      ${oa ? `<span class="chip oa">🔓 open access</span>` : ''}
+      ${oaChip}
     </div>
     <div class="meta-row">
       ${venue ? `<a class="chip v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
@@ -2963,7 +2979,7 @@ const POSTER = { w: null, size: 'a0p', theme: 'brutal' };
 async function posterData(w) {
   const wid = idTail(w.id);
   const [extra, refsJ, ccJ] = await Promise.all([
-    getJSON(`${API}/works/${wid}?select=abstract_inverted_index,grants`).catch(() => ({})),
+    getJSON(`${API}/works/${wid}?select=abstract_inverted_index,keywords,funders`).catch(() => ({})),
     (w.referenced_works || []).length
       ? getJSONChain([
           `${API}/works?filter=ids.openalex:${w.referenced_works.slice(0, 8).map(idTail).join('|')}&per-page=8&select=id,display_name,publication_year,authorships`,
@@ -2973,7 +2989,8 @@ async function posterData(w) {
     getJSON(`${API}/works?filter=cites:${wid}&group_by=authorships.countries`).catch(() => ({ group_by: [] })),
   ]);
   const abstract = invAbstract(extra.abstract_inverted_index);
-  const grants = (extra.grants || []).map(g => g.funder_display_name).filter(Boolean);
+  const keywords = (extra.keywords || []).filter(k => k.score == null || k.score > 0.3).slice(0, 8).map(k => k.display_name).filter(Boolean);
+  const grants = (extra.funders || []).map(f => f.display_name).filter(Boolean);
   const refs = (refsJ.results || []).map(r => {
     const a1 = r.authorships && r.authorships[0] && r.authorships[0].author && r.authorships[0].author.display_name;
     const surname = a1 ? a1.split(/\s+/).pop() : null;
@@ -2983,7 +3000,7 @@ async function posterData(w) {
     .map(g => [String(g.key || '').replace(/.*\//, '').toUpperCase(), g.count])
     .filter(([cc]) => /^[A-Z]{2}$/.test(cc))
     .sort((a, b) => b[1] - a[1]);
-  return { abstract, grants, refs, countries };
+  return { abstract, keywords, grants, refs, countries };
 }
 
 /* ---------- studio ---------- */
@@ -3032,7 +3049,7 @@ function renderPoster(w, d) {
   const secHTML = (sections || [{ head: 'Overview', body: '' }]).map(s => `
     <div class="pb-block">
       <div class="pb-head" contenteditable="true" spellcheck="false">${esc(s.head)}</div>
-      <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'This paper’s abstract isn’t public (closed access). Click here and paste or write your own — you’re probably the author anyway.'}</div>
+      <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'OpenAlex doesn’t have this paper’s abstract on record, and PaperScope never invents text. Click here and paste or write your own — you’re probably the author anyway.'}</div>
       ${sections ? '<div class="pb-src">auto-drafted from the public abstract — click any text to edit</div>' : ''}
     </div>`).join('');
 
@@ -3042,10 +3059,11 @@ function renderPoster(w, d) {
       <div class="p-title" contenteditable="true" spellcheck="false">${esc(w.display_name)}</div>
       <div class="p-authors" contenteditable="true" spellcheck="false">${esc(auths.join(', '))}</div>
       <div class="p-insts" contenteditable="true" spellcheck="false">${esc(insts.slice(0, 4).join(' · ') || '')}</div>
-      <div class="p-venue">${esc([venue, w.publication_year].filter(Boolean).join(' · '))}</div>
+      <div class="p-venue">${esc([venue, w.publication_year].filter(Boolean).join(' · '))}${w.open_access && w.open_access.is_oa ? ` <span class="p-oa">🔓 ${esc((w.open_access.oa_status || 'open') + ' open access')}</span>` : ''}</div>
     </div>
     <div class="p-cols">
       <div class="p-main">
+        ${d.keywords.length ? `<div class="p-kws" contenteditable="true" spellcheck="false">${d.keywords.map(k => `<span class="p-kw">${esc(k)}</span>`).join(' ')}</div>` : ''}
         ${secHTML}
         <div class="pb-block p-figslot">
           <button class="p-addfig" type="button">🖼️ add a figure from your files</button>

@@ -412,6 +412,10 @@
   .p-qr span{display:block; font-size:4.2mm; font-weight:800; margin-top:2mm; text-transform:uppercase; letter-spacing:.4mm;}
   .p-credit{font-size:4.5mm; font-weight:800; text-align:center; opacity:.75; padding:3mm 0 0;}
 
+  .p-kws{display:flex; flex-wrap:wrap; gap:3mm; flex:none;}
+  .p-kw{display:inline-block; font-size:5mm; font-weight:800; padding:1.5mm 4mm; border:.8mm solid var(--ink); background:#fff; text-transform:lowercase;}
+  .p-oa{font-weight:900; white-space:nowrap;}
+
   /* --- theme: neo-brutal (matches the app) --- */
   .poster.brutal{background:var(--paper);}
   .poster.brutal .p-banner{background:var(--c1); color:#fff; border-bottom:2mm solid var(--ink);}
@@ -421,6 +425,8 @@
   .poster.brutal .p-main .pb-block:nth-child(3n) .pb-head{color:var(--c3);}
   .poster.brutal .p-main .pb-block:nth-child(3n+1) .pb-head{color:var(--c1);}
   .poster.brutal .p-stat{background:var(--lime); box-shadow:1.5mm 1.5mm 0 var(--ink);}
+  .poster.brutal .p-kw{box-shadow:1.2mm 1.2mm 0 var(--ink); background:var(--sky);}
+  .poster.brutal .p-oa{color:var(--lime);}
 
   /* --- theme: classic (serif, conference-safe) --- */
   .poster.classic{font-family:Georgia,'Times New Roman',serif; background:#fff;}
@@ -431,6 +437,8 @@
   .poster.classic .p-stat{border-color:#1d3557; background:#f1faee;}
   .poster.classic .p-addfig,.poster.classic .p-fig img,.poster.classic .p-qr canvas{border-color:#1d3557;}
   .poster.classic .p-figslot{border-color:#1d3557 !important;}
+  .poster.classic .p-kw{border-color:#1d3557; background:#f1faee;}
+  .poster.classic .p-oa{color:#a8dadc;}
 
   /* --- theme: minimal (mono, lots of air) --- */
   .poster.minimal{background:#fff;}
@@ -439,6 +447,7 @@
   .poster.minimal .pb-head{font-size:7mm; border-bottom:.8mm solid var(--ink); padding-bottom:2mm;}
   .poster.minimal .p-stat{border-width:.6mm;}
   .poster.minimal .p-figslot{border:.6mm dashed var(--ink) !important; padding:8mm !important;}
+  .poster.minimal .p-kw{border-width:.5mm;}
 
   /* --- print: only the poster, unscaled --- */
   @media print{

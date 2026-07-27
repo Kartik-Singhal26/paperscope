@@ -17,7 +17,7 @@ const MAIN = {
   related_works: Array.from({ length: 10 }, (_, i) => `https://openalex.org/W90${i}`),
   referenced_works: ['https://openalex.org/W900', 'https://openalex.org/W901'],
   counts_by_year: Array.from({ length: 9 }, (_, i) => ({ year: 2018 + i, cited_by_count: [500, 1500, 4000, 9000, 16000, 26000, 30000, 34000, 12000][i] })),
-  open_access: { is_oa: true },
+  open_access: { is_oa: true, oa_status: 'gold', oa_url: 'https://arxiv.org/abs/1706.03762' },
   fwci: 208.6, citation_normalized_percentile: { value: 0.9999, is_in_top_1_percent: true, is_in_top_10_percent: true },
   biblio: { volume: '30', first_page: '5998', last_page: '6008' },
 };
@@ -113,7 +113,7 @@ const authorCiters = { meta: { count: 900 }, results: Array.from({ length: 60 },
 })) };
 
 const posterAbstract = 'Background: The dominant sequence transduction models are based on complex recurrent or convolutional networks. Methods: We propose the Transformer, a new architecture based solely on attention mechanisms. Results: Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task. Conclusions: Attention really is all you need for sequence modeling.';
-const POSTER_EXTRA = { abstract_inverted_index: (() => { const inv = {}; posterAbstract.split(' ').forEach((w, i) => { (inv[w] = inv[w] || []).push(i); }); return inv; })(), grants: [{ funder_display_name: 'National Science Foundation' }, { funder_display_name: 'Google Research' }] };
+const POSTER_EXTRA = { abstract_inverted_index: (() => { const inv = {}; posterAbstract.split(' ').forEach((w, i) => { (inv[w] = inv[w] || []).push(i); }); return inv; })(), funders: [{ id: 'https://openalex.org/F1', display_name: 'National Science Foundation' }, { id: 'https://openalex.org/F2', display_name: 'Google Research' }], keywords: [{ display_name: 'Attention mechanism', score: 0.9 }, { display_name: 'Transformer', score: 0.8 }, { display_name: 'Sequence modeling', score: 0.6 }, { display_name: 'Noise keyword', score: 0.1 }] };
 const posterRefs = { results: [
   { id: 'https://openalex.org/W900', display_name: 'Neural machine translation by jointly learning to align and translate', publication_year: 2015, authorships: [{ author: { display_name: 'Dzmitry Bahdanau' } }, { author: { display_name: 'Yoshua Bengio' } }] },
   { id: 'https://openalex.org/W901', display_name: 'Long short-term memory', publication_year: 1997, authorships: [{ author: { display_name: 'Sepp Hochreiter' } }] },
@@ -284,6 +284,8 @@ let srcDetail429 = 0;
   const heroTxt = await page.textContent('#hero');
   checks.fwciBadge = !heroTxt.includes('208.6');  // moved out of hero
   checks.percBadge = heroTxt.includes('top 1%');
+  checks.oaTierChip = heroTxt.includes('gold open access');
+  checks.oaChipLink = await page.getAttribute('.chip.oa', 'href');
   await page.click('#bibBtn');
   await page.waitForTimeout(300);
   checks.bibHero = (await page.evaluate(() => navigator.clipboard.readText())).slice(0, 60);
@@ -553,8 +555,10 @@ let srcDetail429 = 0;
     checks.posterFunding = pTxt.includes('National Science Foundation');
     checks.posterRefs = pTxt.includes('Bahdanau et al.') && pTxt.includes('(1997). Long short-term memory');
     checks.posterFlags = await page.$eval('.p-flags', el => el.textContent.trim().length > 0);
+    checks.posterKeywords = pTxt.includes('Attention mechanism') && pTxt.includes('Transformer') && !pTxt.includes('Noise keyword');
+    checks.posterOaBadge = pTxt.includes('gold open access');
   } else {
-    checks.posterHonest = pTxt.includes('isn\u2019t public');  // closed-access prompt, never invented text
+    checks.posterHonest = pTxt.includes('doesn\u2019t have this paper\u2019s abstract on record');  // honest empty state, never invented text
   }
   checks.posterQrCount = await page.$$eval('.p-qr canvas', els => els.filter(c => c.width > 20).length) === 2;
   checks.posterScaled = await page.$eval('#posterArt', el => /scale\(/.test(el.style.transform));

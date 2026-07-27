@@ -74,7 +74,14 @@ function renderHero(w) {
     : esc(a.display_name)).join(', ') + (auths.length > 8 ? ' + ' + (auths.length - 8) + ' more' : '');
   const venue = w.primary_location && w.primary_location.source && w.primary_location.source.display_name;
   const topic = w.primary_topic && w.primary_topic.display_name;
-  const oa = w.open_access && w.open_access.is_oa;
+  const oaInfo = w.open_access || {};
+  const oa = oaInfo.is_oa;
+  const oaTier = oa ? (oaInfo.oa_status && oaInfo.oa_status !== 'closed' ? oaInfo.oa_status + ' ' : '') + 'open access' : '';
+  const oaChip = oa
+    ? (oaInfo.oa_url
+      ? `<a class="chip oa" href="${esc(oaInfo.oa_url)}" target="_blank" rel="noopener" title="Free to read — ${esc(oaTier)}. Click to open the free copy.">🔓 ${esc(oaTier)} ↗</a>`
+      : `<span class="chip oa" title="Free to read — ${esc(oaTier)}">🔓 ${esc(oaTier)}</span>`)
+    : '';
   $('#hero').innerHTML = `
     <div class="sticker">UNDER THE SCOPE</div>
     <h2>${esc(w.display_name)}</h2>
@@ -83,7 +90,7 @@ function renderHero(w) {
       <span class="chip y">📅 ${esc(w.publication_year ?? '—')}</span>
       <span class="chip c" id="citeChip" title="Citation count from OpenAlex (publisher-registered metadata). Google Scholar usually shows more — it also counts preprints, theses, and other grey literature.">📣 ${fmt(w.cited_by_count)} citations</span>
       ${percChip(w)}
-      ${oa ? `<span class="chip oa">🔓 open access</span>` : ''}
+      ${oaChip}
     </div>
     <div class="meta-row">
       ${venue ? `<a class="chip v" href="${esc(w.primary_location.source.id)}" target="_blank" rel="noopener" title="Open this venue on OpenAlex">📚 ${esc(venue)}</a>` : ''}
