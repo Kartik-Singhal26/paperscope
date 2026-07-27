@@ -41,6 +41,19 @@ src/js/02-mode.js … 10-crew.js   one module per feature area (see build.js MAN
 
 Edit files in `src/`, then `npm run build` (plain Node, zero dependencies) to regenerate `index.html`. The build also emits `dist/` (app + OG image only), which is what Cloudflare deploys (`wrangler.jsonc` points assets there — never the repo root, which would drag `node_modules` along). The build is a deterministic concatenation — module order is the `MANIFEST` in `build.js`, and modules share one script scope, so declarations are global across files.
 
+## Release pipeline
+
+Two channels, one repo:
+
+- **`main` = production.** Protected, PR-only. Every merge auto-builds and deploys to [paperscope.net](https://paperscope.net) via Cloudflare (prod-stamped version footer).
+- **`dev` = integration.** Day-to-day work lands here (directly or via feature branches). Not public: the repo is private, and Cloudflare preview builds are either disabled or gated behind Cloudflare Access (see below).
+
+Builds are **channel-stamped**: local and committed builds are always `prod`-stamped (so the committed `index.html` stays deterministic), while Cloudflare builds of non-`main` branches — and explicit `CHANNEL=dev node build.js` runs — get a `-dev` version suffix and an unmissable 🚧 DEV BUILD ribbon.
+
+**CI** (GitHub Actions) runs on every PR and every push to `dev`: rebuilds from `src/`, verifies the committed artifact matches byte-for-byte, then runs both Playwright suites (regression + API-fallback), which exit non-zero on any failed check. A PR into `main` can't merge red.
+
+**Releasing** = bump `version`/`versionDate` in `package.json` on `dev`, open a PR `dev` → `main`, merge when CI is green. Cloudflare does the rest.
+
 ## Dev notes
 
 - `dev/test.js` — Playwright smoke test with mocked API fixtures. Run with `npm i playwright && node dev/test.js` (set `FALLBACK=1` to exercise the API-fallback paths). Adjust the `executablePath` / screenshot paths for your machine.

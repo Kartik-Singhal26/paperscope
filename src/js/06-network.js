@@ -404,6 +404,7 @@ $('#tableBtn').addEventListener('click', () => {
 
 function drawNetwork() {
   RESIZERS.set('net', () => { if (NET) { drawNetwork(); if (NET.mode === 'time') computeTimeTargets(); } });
+  if (NET.raf) { cancelAnimationFrame(NET.raf); NET.raf = null; }  // never leave an orphan loop behind
   const box = $('#netbox'); box.innerHTML = '';
   const W = Math.max(380, box.clientWidth || 560), H = 430;
   NET.W = W; NET.H = H;
@@ -545,6 +546,7 @@ function drawNetwork() {
     }
   }
   function loop() {
+    if (!NET || NET.nodes !== nodes) return;  // superseded or torn down — stop silently
     NET.frames = (NET.frames || 0) + 1;
     const moving = physics();
     draw();
