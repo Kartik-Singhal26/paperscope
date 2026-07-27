@@ -24,6 +24,7 @@ const MANIFEST = [
   '09-map.js',     // dot-grid world map + bubbles
   '10-crew.js',    // citing-author cards
   '11-compare.js', // ⚔️ VS mode: papers or authors head-to-head
+  '12-poster.js',  // 🖼️ Poster Studio: conference-poster artboard + QR + print-to-PDF
 ];
 
 const read = f => fs.readFileSync(f, 'utf8');

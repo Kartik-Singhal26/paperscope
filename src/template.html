@@ -155,6 +155,32 @@
 <div id="tip"></div>
 <div id="toast"></div>
 
+<div id="posterStudio" style="display:none">
+  <div class="studio-bar">
+    <button class="tool" id="posterClose" title="Back to the dashboard">← back</button>
+    <span class="studio-title">🖼️ POSTER STUDIO</span>
+    <span class="studio-hint">click any text on the poster to edit it</span>
+    <span class="studio-spacer"></span>
+    <label class="studio-ctl">theme
+      <select id="posterTheme">
+        <option value="brutal" selected>neo-brutal</option>
+        <option value="classic">classic</option>
+        <option value="minimal">minimal</option>
+      </select>
+    </label>
+    <label class="studio-ctl">size
+      <select id="posterSize">
+        <option value="a0p" selected>A0 portrait</option>
+        <option value="a0l">A0 landscape</option>
+        <option value="land48">48×36 in</option>
+      </select>
+    </label>
+    <button class="tool primary" id="posterPrint" title="Print to PDF at full poster size — pick “Save as PDF” in the dialog">🖨️ export PDF</button>
+  </div>
+  <div id="posterBoard"></div>
+</div>
+<style id="posterPageStyle">@page { size: 841mm 1189mm; margin: 0; }</style>
+
 <script>__SCRIPT__</script>
 </body>
 </html>

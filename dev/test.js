@@ -112,6 +112,13 @@ const authorCiters = { meta: { count: 900 }, results: Array.from({ length: 60 },
     : [{ author: { id: `https://openalex.org/A7${i % 4}`, display_name: ['Ada Fan', 'Bo Cite', 'Cy Ref', 'Di Quote'][i % 4] }, institutions: [{ id: `https://openalex.org/I7${i % 4}`, display_name: 'Fan University', country_code: ['US', 'CN', 'DE', 'IN'][i % 4] }], countries: [['US', 'CN', 'DE', 'IN'][i % 4]] }],
 })) };
 
+const posterAbstract = 'Background: The dominant sequence transduction models are based on complex recurrent or convolutional networks. Methods: We propose the Transformer, a new architecture based solely on attention mechanisms. Results: Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task. Conclusions: Attention really is all you need for sequence modeling.';
+const POSTER_EXTRA = { abstract_inverted_index: (() => { const inv = {}; posterAbstract.split(' ').forEach((w, i) => { (inv[w] = inv[w] || []).push(i); }); return inv; })(), grants: [{ funder_display_name: 'National Science Foundation' }, { funder_display_name: 'Google Research' }] };
+const posterRefs = { results: [
+  { id: 'https://openalex.org/W900', display_name: 'Neural machine translation by jointly learning to align and translate', publication_year: 2015, authorships: [{ author: { display_name: 'Dzmitry Bahdanau' } }, { author: { display_name: 'Yoshua Bengio' } }] },
+  { id: 'https://openalex.org/W901', display_name: 'Long short-term memory', publication_year: 1997, authorships: [{ author: { display_name: 'Sepp Hochreiter' } }] },
+] };
+
 function routeFor(url) {
   const u = decodeURIComponent(url);
   if (process.env.FALLBACK) {
@@ -119,6 +126,7 @@ function routeFor(url) {
     if (u.includes('/sources?filter=topics.id:')) return null;
     if (u.includes('filter=ids.openalex:W90')) return null;
     if (u.includes('/authors?filter=ids.openalex:')) return null;
+    if (u.includes('select=abstract_inverted_index')) return null;
   }
   if (u.match(/\/works\/W123\?/)) return { ...work('W123', 'Attention in psychology', 1990, 500, 'Psychology'),
     authorships: [], topics: [], concepts: [], related_works: [], referenced_works: ['https://openalex.org/W1', 'https://openalex.org/W2'],
@@ -154,6 +162,8 @@ function routeFor(url) {
     { key: 'US', count: 300 }, { key: 'CN', count: 200 }, { key: 'IN', count: 150 }, { key: 'DE', count: 80 }] };
   if (u.includes('filter=cites:W600|')) return authorCiters;
   if (u.includes('/authors?filter=ids.openalex:A7')) return { results: [] };
+  if (u.includes('select=abstract_inverted_index')) return POSTER_EXTRA;
+  if (u.includes('select=id,display_name,publication_year,authorships')) return posterRefs;
   if (u.match(/\/works\/W2741809807/)) return MAIN;
   const wd = u.match(/\/works\/(W90\d)\?/);
   if (wd) { const r = relatedBatch.results.find(x => x.id.endsWith(wd[1])); return { ...r, authorships: [], topics: [], concepts: [], related_works: [], counts_by_year: [{ year: 2020, cited_by_count: 30 }, { year: 2021, cited_by_count: 60 }, { year: 2022, cited_by_count: 90 }, { year: 2023, cited_by_count: 100 }, { year: 2024, cited_by_count: 70 }] }; }
@@ -257,8 +267,11 @@ let srcDetail429 = 0;
 
   // hover network center for tooltip
   if (netCanvas) {
-    await netCanvas.scrollIntoViewIfNeeded();
-    const bb = await netCanvas.boundingBox();
+    let bb = null;
+    for (let t = 0; t < 5 && !bb; t++) {   // re-query on detach: a late re-render can replace the canvas
+      try { const h = await page.$('#net'); await h.scrollIntoViewIfNeeded(); bb = await h.boundingBox(); }
+      catch (e) { await page.waitForTimeout(500); }
+    }
     let tipOk = false;
     for (let i = 0; i < 12 && !tipOk; i++) {   // physics may still be settling — jiggle and retry
       await page.mouse.move(bb.x + bb.width / 2 + (i % 3), bb.y + bb.height / 2 + (i % 2));
@@ -520,6 +533,57 @@ let srcDetail429 = 0;
   await page.waitForTimeout(1500);
   checks.heroAuthorNav = (await page.textContent('#hero')).includes('Kartik Singhal');
   checks.heroAuthorPermalink = await page.evaluate(() => location.search);
+
+  // ===== poster studio =====
+  await page.evaluate(() => loadPaper('W2741809807'));
+  await page.waitForTimeout(1000);
+  await page.click('#posterBtn');
+  await page.waitForTimeout(1800);
+  checks.posterOpen = await page.$eval('#posterStudio', el => el.style.display !== 'none');
+  checks.posterArt = !!(await page.$('#posterArt'));
+  const pTxt = (await page.textContent('#posterArt')).replace(/\s+/g, ' ');
+  checks.posterTitle = pTxt.includes('Attention Is All You Need');
+  checks.posterAuthors = pTxt.includes('Ashish Vaswani');
+  checks.posterVenue = pTxt.includes('NeurIPS');
+  checks.posterCredit = pTxt.includes('paperscope.net');
+  checks.posterStats = pTxt.includes('citations') && pTxt.includes('130.0k');
+  if (!process.env.FALLBACK) {
+    checks.posterSections = pTxt.includes('Background') && pTxt.includes('Methods') && pTxt.includes('Results') && pTxt.includes('Conclusions');
+    checks.posterAutoNote = pTxt.includes('auto-drafted from the public abstract');
+    checks.posterFunding = pTxt.includes('National Science Foundation');
+    checks.posterRefs = pTxt.includes('Bahdanau et al.') && pTxt.includes('(1997). Long short-term memory');
+    checks.posterFlags = await page.$eval('.p-flags', el => el.textContent.trim().length > 0);
+  } else {
+    checks.posterHonest = pTxt.includes('isn\u2019t public');  // closed-access prompt, never invented text
+  }
+  checks.posterQrCount = await page.$$eval('.p-qr canvas', els => els.filter(c => c.width > 20).length) === 2;
+  checks.posterScaled = await page.$eval('#posterArt', el => /scale\(/.test(el.style.transform));
+  await page.screenshot({ path: process.env.FALLBACK ? 'shot_poster_fallback.png' : 'shot_poster.png' });
+  // click-to-edit
+  await page.evaluate(() => { document.querySelector('.p-title').textContent = 'Edited Poster Title'; });
+  checks.posterEditable = await page.$eval('.p-title', el => el.getAttribute('contenteditable') === 'true' && el.textContent === 'Edited Poster Title');
+  // figure upload (1×1 png via the file chooser)
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('.p-addfig')]);
+  await chooser.setFiles({ name: 'fig.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+  await page.waitForTimeout(600);
+  checks.posterFigure = !!(await page.$('.p-fig img'));
+  // theme + size switching rewrites the artboard class and the @page rule
+  await page.selectOption('#posterTheme', 'classic');
+  checks.posterTheme = await page.$eval('#posterArt', el => el.classList.contains('classic'));
+  await page.selectOption('#posterSize', 'a0l');
+  checks.posterSizeCls = await page.$eval('#posterArt', el => el.classList.contains('a0l'));
+  checks.posterPageRule = await page.$eval('#posterPageStyle', el => el.textContent.includes('1189mm 841mm'));
+  await page.selectOption('#posterSize', 'a0p');
+  await page.selectOption('#posterTheme', 'brutal');
+  await page.waitForTimeout(400);
+  // QR canvases → PNGs for offline machine decoding
+  const qrData = await page.evaluate(() => ({ doi: document.getElementById('qrDoi').toDataURL(), scope: document.getElementById('qrScope').toDataURL() }));
+  fs.writeFileSync('qr_doi.png', Buffer.from(qrData.doi.split(',')[1], 'base64'));
+  fs.writeFileSync('qr_scope.png', Buffer.from(qrData.scope.split(',')[1], 'base64'));
+  // close returns to the dashboard
+  await page.click('#posterClose');
+  checks.posterClosed = await page.$eval('#posterStudio', el => el.style.display === 'none');
+  checks.posterScrollRestored = await page.evaluate(() => document.body.style.overflow === '');
 
   console.log(JSON.stringify(checks, null, 1));
   console.log('CONSOLE ISSUES:', errors.length ? errors.slice(0, 10) : 'none');

@@ -95,10 +95,12 @@ function renderHero(w) {
       <button class="tool" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
       <button class="tool" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>
       <button class="tool" id="passportBtn" title="Download a citation-passport card for sharing">🛂 passport</button>
+      <button class="tool" id="posterBtn" title="Open the Poster Studio — turn this paper into an editable conference poster">🖼️ poster</button>
     </div>`;
   renderTrend(w);
   $('#shareBtn').addEventListener('click', copyPermalink);
   $('#passportBtn').addEventListener('click', downloadPassport);
+  $('#posterBtn').addEventListener('click', () => openPoster(w));
   $('#bibBtn').addEventListener('click', () => copyText(bibtexForWork(w), 'BibTeX copied! 📋 paste it into your .bib'));
   document.querySelectorAll('#hero a.au').forEach(a => a.addEventListener('click', ev => {
     ev.preventDefault();

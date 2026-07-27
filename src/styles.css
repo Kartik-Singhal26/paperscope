@@ -356,3 +356,98 @@
   button.logo{cursor:pointer; font-family:inherit;}
   button.logo:hover{transform:rotate(-1.2deg) translate(-2px,-2px); box-shadow:9px 9px 0 var(--ink);}
   button.logo:active{transform:rotate(-1.2deg) translate(3px,3px); box-shadow:2px 2px 0 var(--ink);}
+
+  /* ==================== POSTER STUDIO 🖼️ ==================== */
+  #posterStudio{position:fixed; inset:0; z-index:80; background:var(--page); overflow:auto;}
+  .studio-bar{
+    position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 18px; background:var(--paper); border-bottom:4px solid var(--ink);
+  }
+  .studio-title{font-weight:900; font-size:17px; letter-spacing:.5px;}
+  .studio-hint{font-size:12.5px; color:var(--muted); font-weight:600;}
+  .studio-spacer{flex:1;}
+  .studio-ctl{font-size:12.5px; font-weight:800; display:inline-flex; align-items:center; gap:6px;}
+  .studio-ctl select{font:inherit; font-weight:800; padding:4px 8px; border:2.5px solid var(--ink); background:#fff; box-shadow:2px 2px 0 var(--ink); cursor:pointer;}
+  .tool.primary{background:var(--lime);}
+  #posterBoard{padding:26px 0 60px; display:flex; justify-content:center; align-items:flex-start; overflow:hidden;}
+  #posterBoard .mini-load{margin:60px auto;}
+
+  /* --- the artboard: real print millimetres, scaled to fit on screen --- */
+  .poster{background:#fff; color:var(--ink); display:flex; flex-direction:column; overflow:hidden; flex:none;}
+  .poster.a0p{width:841mm; height:1189mm;}
+  .poster.a0l{width:1189mm; height:841mm;}
+  .poster.land48{width:1219mm; height:914mm;}
+  .poster [contenteditable]{outline:none; cursor:text;}
+  .poster [contenteditable]:hover{box-shadow:inset 0 0 0 3px var(--sky);}
+  .poster [contenteditable]:focus{box-shadow:inset 0 0 0 3px var(--c1);}
+
+  .p-banner{padding:16mm 18mm 12mm; flex:none;}
+  .p-title{font-weight:900; font-size:19mm; line-height:1.08; letter-spacing:-.5mm;}
+  .p-authors{font-weight:800; font-size:9mm; margin-top:7mm;}
+  .p-insts{font-weight:600; font-size:6.5mm; margin-top:3mm; opacity:.85;}
+  .p-venue{font-weight:800; font-size:6mm; margin-top:5mm; text-transform:uppercase; letter-spacing:.8mm;}
+  .p-cols{display:flex; gap:10mm; padding:0 18mm 14mm; flex:1; min-height:0;}
+  .p-main{flex:1.7; display:flex; flex-direction:column; gap:8mm; min-width:0;}
+  .p-side{flex:1; display:flex; flex-direction:column; gap:8mm; min-width:0;}
+  .pb-block{padding:8mm; min-height:0;}
+  .pb-head{font-weight:900; font-size:9mm; text-transform:uppercase; letter-spacing:.5mm; margin-bottom:4mm;}
+  .pb-body{font-size:6.2mm; line-height:1.45; font-weight:500;}
+  .pb-body.small{font-size:5.2mm;}
+  .pb-body[data-empty="1"]{opacity:.55; font-style:italic;}
+  .pb-src{font-size:4mm; margin-top:3.5mm; opacity:.6; font-weight:700;}
+  .p-stats{display:flex; gap:5mm; flex-wrap:wrap; margin-bottom:5mm;}
+  .p-stat{flex:1; min-width:34mm; text-align:center; padding:4mm 2mm; border:1mm solid var(--ink);}
+  .p-stat b{display:block; font-size:11mm; font-weight:900;}
+  .p-stat span{font-size:4.2mm; font-weight:700; text-transform:uppercase; letter-spacing:.3mm;}
+  .p-flags{font-size:9mm; line-height:1.5; letter-spacing:1.5mm;}
+  .p-refs{font-size:4.8mm; line-height:1.4; padding-left:7mm;}
+  .p-refs li{margin-bottom:2.5mm;}
+  .p-figslot{text-align:center; border:1mm dashed var(--ink) !important; background:transparent !important;}
+  .p-addfig{font:inherit; font-weight:800; font-size:6mm; padding:5mm 8mm; border:1mm solid var(--ink); background:#fff; cursor:pointer; box-shadow:1.5mm 1.5mm 0 var(--ink);}
+  .p-addfig:hover{background:var(--sky);}
+  .p-fig img{width:100%; display:block; border:1mm solid var(--ink);}
+  .p-qrs{display:flex; gap:8mm; justify-content:center;}
+  .p-qr{text-align:center;}
+  .p-qr canvas{width:52mm; height:52mm; image-rendering:pixelated; border:1mm solid var(--ink); background:#fff;}
+  .p-qr span{display:block; font-size:4.2mm; font-weight:800; margin-top:2mm; text-transform:uppercase; letter-spacing:.4mm;}
+  .p-credit{font-size:4.5mm; font-weight:800; text-align:center; opacity:.75; padding:3mm 0 0;}
+
+  /* --- theme: neo-brutal (matches the app) --- */
+  .poster.brutal{background:var(--paper);}
+  .poster.brutal .p-banner{background:var(--c1); color:#fff; border-bottom:2mm solid var(--ink);}
+  .poster.brutal .p-banner .p-venue{color:var(--lime);}
+  .poster.brutal .pb-block{background:#fff; border:1.2mm solid var(--ink); box-shadow:2.5mm 2.5mm 0 var(--ink);}
+  .poster.brutal .p-main .pb-block:nth-child(3n+2) .pb-head{color:var(--c2);}
+  .poster.brutal .p-main .pb-block:nth-child(3n) .pb-head{color:var(--c3);}
+  .poster.brutal .p-main .pb-block:nth-child(3n+1) .pb-head{color:var(--c1);}
+  .poster.brutal .p-stat{background:var(--lime); box-shadow:1.5mm 1.5mm 0 var(--ink);}
+
+  /* --- theme: classic (serif, conference-safe) --- */
+  .poster.classic{font-family:Georgia,'Times New Roman',serif; background:#fff;}
+  .poster.classic .p-banner{background:#1d3557; color:#fff;}
+  .poster.classic .p-banner .p-venue{color:#a8dadc;}
+  .poster.classic .pb-block{border:.6mm solid #1d3557;}
+  .poster.classic .pb-head{color:#1d3557; border-bottom:.8mm solid #1d3557; padding-bottom:2mm;}
+  .poster.classic .p-stat{border-color:#1d3557; background:#f1faee;}
+  .poster.classic .p-addfig,.poster.classic .p-fig img,.poster.classic .p-qr canvas{border-color:#1d3557;}
+  .poster.classic .p-figslot{border-color:#1d3557 !important;}
+
+  /* --- theme: minimal (mono, lots of air) --- */
+  .poster.minimal{background:#fff;}
+  .poster.minimal .p-banner{border-bottom:1.5mm solid var(--ink);}
+  .poster.minimal .pb-block{border:none; padding:0 0 4mm;}
+  .poster.minimal .pb-head{font-size:7mm; border-bottom:.8mm solid var(--ink); padding-bottom:2mm;}
+  .poster.minimal .p-stat{border-width:.6mm;}
+  .poster.minimal .p-figslot{border:.6mm dashed var(--ink) !important; padding:8mm !important;}
+
+  /* --- print: only the poster, unscaled --- */
+  @media print{
+    body > *:not(#posterStudio){display:none !important;}
+    body{background:#fff !important; overflow:visible !important;}
+    #posterStudio{position:static; overflow:visible; background:#fff;}
+    .studio-bar{display:none !important;}
+    #posterBoard{padding:0; height:auto !important; display:block; overflow:visible;}
+    .poster{transform:none !important; box-shadow:none !important;}
+    .poster [contenteditable]:hover,.poster [contenteditable]:focus{box-shadow:none;}
+    .p-addfig,.p-figslot{display:none !important;}
+  }
