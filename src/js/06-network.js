@@ -346,8 +346,9 @@ $('#homeBtn').addEventListener('click', goHome);
 /* landing page: a taste of what the machine can do */
 async function loadTrending() {
   try {
-    const since = new Date(Date.now() - 150 * 864e5).toISOString().slice(0, 10);
-    const j = await getJSON(`${API}/works?filter=from_publication_date:${since},cited_by_count:>20,has_doi:true&sort=cited_by_count:desc&per-page=6&select=id,display_name,publication_year,cited_by_count,primary_topic,primary_location`);
+    const since = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
+    const daySeed = Math.floor(Date.now() / 864e5);
+    const j = await getJSON(`${API}/works?filter=from_publication_date:${since},cited_by_count:>50,has_doi:true&sample=6&seed=${daySeed}&per-page=6&select=id,display_name,publication_year,cited_by_count,primary_topic,primary_location`);
     const works = (j.results || []).slice(0, 6);
     if (!works.length) return;
     const box = $('#tcards'); box.innerHTML = '';

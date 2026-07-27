@@ -215,6 +215,8 @@ let srcDetail429 = 0;
   checks0 = {};
   checks0.trendingShown = await page.$eval('#trendingWrap', el => el.style.display !== 'none');
   checks0.trendingCards = await page.$$eval('.tcard', els => els.length);
+  checks0.hintDaily = (await page.textContent('.hint')).includes('fresh examples daily');
+  checks0.trendingSampled = await page.evaluate(() => performance.getEntriesByType('resource').some(r => r.name.includes('sample=6')));
   checks0.versionFooter = (await page.textContent('#verSticker')).trim();
   await page.screenshot({ path: 'shot_home.png' });
 

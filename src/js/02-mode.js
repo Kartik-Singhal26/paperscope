@@ -1,8 +1,23 @@
 /* ============ mode toggle ============ */
 let MODE = 'paper';
+const DAY_SEED = Math.floor(Date.now() / 864e5); // rotates once a day, same for everyone
+const pick = arr => arr[DAY_SEED % arr.length];
+const PAPER_EXAMPLES = [
+  ['Attention is all you need', 'CRISPR-Cas9', '10.1038/nature14539'],
+  ['Deep residual learning', 'mRNA vaccines', '10.1126/science.1258096'],
+  ['Highly accurate protein structure prediction with AlphaFold', 'graphene', '10.1038/s41586-021-03819-2'],
+  ['Generative adversarial networks', 'gut microbiome', '10.1038/nature14539'],
+  ['ImageNet classification with deep convolutional neural networks', 'perovskite solar cells', '10.1126/science.1258096'],
+  ['A brief history of black holes', 'quantum supremacy', '10.1038/s41586-019-1666-5'],
+  ['Random forests', 'circadian rhythms', '10.1038/nature14539'],
+];
+const AUTHOR_EXAMPLES = ['Yoshua Bengio', 'Jennifer Doudna', 'Terence Tao', 'Katalin Karikó', 'Demis Hassabis', 'Frances Arnold', 'Shinya Yamanaka'];
 const MODE_UI = {
-  paper: { ph: 'Type a paper title or paste a DOI…', hint: 'Try <b>“Attention is all you need”</b>, <b>“CRISPR-Cas9”</b>, or paste a DOI like <b>10.1038/nature14539</b> · press 🎲 for pot luck' },
-  author: { ph: 'Type a researcher’s name or paste an ORCID…', hint: 'Try your own name, or paste an ORCID like <b>0000-0002-1825-0097</b> — ORCID skips the name-twin problem · 🎲 for a random star' },
+  paper: { ph: 'Type a paper title or paste a DOI…', hint: () => {
+    const [a, b, doi] = pick(PAPER_EXAMPLES);
+    return `Try <b>“${a}”</b>, <b>“${b}”</b>, or paste a DOI like <b>${doi}</b> · press 🎲 for pot luck · fresh examples daily`;
+  } },
+  author: { ph: 'Type a researcher’s name or paste an ORCID…', hint: () => `Try your own name, <b>“${pick(AUTHOR_EXAMPLES)}”</b>, or paste an ORCID like <b>0000-0002-1825-0097</b> — ORCID skips the name-twin problem · 🎲 for a random star` },
 };
 function setMode(m) {
   MODE = m;
@@ -16,7 +31,7 @@ function setMode(m) {
   if (!cmp) {
     $('#vsresults').style.display = 'none';
     qInput.placeholder = MODE_UI[m].ph;
-    document.querySelector('.hint').innerHTML = MODE_UI[m].hint;
+    document.querySelector('.hint').innerHTML = MODE_UI[m].hint();
   } else {
     $('#results').className = '';
     $('#trendingWrap').style.display = 'none';
@@ -47,3 +62,6 @@ function setModeTexts(m) {
   }
 }
 
+
+// stamp today's examples into the landing hint on first paint
+document.querySelector('.hint').innerHTML = MODE_UI.paper.hint();
