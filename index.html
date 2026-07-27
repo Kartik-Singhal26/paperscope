@@ -405,7 +405,7 @@
   /* main column flows into TWO print-columns so long abstracts read like a poster, not a wall */
   .p-main{flex:1.75; min-width:0; column-count:2; column-gap:10mm; column-fill:balance;}
   .p-main > *{break-inside:avoid; margin:0 0 8mm; width:100%;}
-  .p-main .pb-flow{break-inside:auto;}          /* one long Overview: let text flow across both columns */
+  .p-main .pb-flow{column-span:all;}            /* one long Overview: a single full-width block, never split into columns */
   .p-side{flex:1; display:flex; flex-direction:column; gap:8mm; min-width:0;}
   .pb-block{padding:8mm; min-height:0;}
   .pb-head{font-weight:900; font-size:8.4mm; text-transform:uppercase; letter-spacing:.5mm; margin-bottom:5mm; display:flex; align-items:baseline; gap:3.5mm; line-height:1.05;}
@@ -641,7 +641,7 @@
   <footer>
     <span class="foot-sticker">Built with ❤️ + data from <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a> — the open catalog of the world’s research.</span>
     <span class="foot-sticker">Created by <a href="https://github.com/Kartik-Singhal26" target="_blank" rel="noopener">@kartik</a></span>
-    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.1.0 · 2026-07-27 · build 77ba90c3</a></span>
+    <span class="foot-sticker ver" id="verSticker" title="Version · release date · deterministic build fingerprint of the source">🔭 <a href="https://github.com/Kartik-Singhal26/paperscope" target="_blank" rel="noopener">v1.1.0 · 2026-07-27 · build 67721de2</a></span>
   </footer>
 </div>
 <div id="tip"></div>
