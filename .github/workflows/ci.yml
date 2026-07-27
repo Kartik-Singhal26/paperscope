@@ -1,0 +1,24 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [dev]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build from src
+        run: node build.js
+      - name: Committed artifact must match src
+        run: git diff --exit-code index.html
+      - name: Install Playwright Chromium
+        run: npm i playwright && npx playwright install --with-deps chromium
+      - name: Regression suite
+        run: CHROMIUM_PATH= PS_INDEX=$PWD/index.html node dev/test.js
+      - name: Fallback-path suite
+        run: CHROMIUM_PATH= PS_INDEX=$PWD/index.html FALLBACK=1 node dev/test.js
