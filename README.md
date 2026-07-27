@@ -17,7 +17,9 @@ Papers carry **FWCI and field-percentile badges** ("top 1% of its field-year"), 
 
 **⚔️ Compare mode**: pit two papers or two researchers head-to-head — a tale-of-the-tape with tug-of-war bars, a grouped citations-per-year trend duel, and a reach comparison of citing countries, all shareable via `?vs=` permalinks.
 
-Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose broader corpus usually sits closer to Google Scholar's number), with a one-click Google Scholar link. The 🎲 button rolls a random paper from OpenAlex's ~250M-work catalog.
+Citation counts are shown from both **OpenAlex** and **Semantic Scholar** (whose broader corpus usually sits closer to Google Scholar's number), with a one-click Google Scholar link. Every paper links to its **original** publisher page, an **arXiv** preprint or free **PDF** when an open-access copy exists (the open-access chip prefers a clean arXiv/repository copy over low-quality mirrors), and Google Scholar. The 🎲 button rolls a random paper from OpenAlex's ~250M-work catalog.
+
+Where OpenAlex is missing a paper's abstract, the Poster Studio falls back to the **arXiv / Semantic Scholar** record for the real abstract (arXiv's own API blocks browser requests, so Semantic Scholar — which indexes arXiv and is CORS-open — is used); it returns nothing for genuinely closed papers, so no text is ever invented.
 
 ![screenshot](docs_screenshot.png)
 

@@ -1,5 +1,21 @@
 /* ============ main orchestration ============ */
-const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,related_works,doi,open_access,fwci,citation_normalized_percentile,biblio';
+const WORK_SELECT = 'id,display_name,publication_year,cited_by_count,counts_by_year,referenced_works,authorships,primary_topic,topics,concepts,primary_location,locations,best_oa_location,related_works,doi,open_access,fwci,citation_normalized_percentile,biblio';
+
+const https = u => u ? String(u).replace(/^http:\/\//, 'https://') : u;
+// arXiv shows up as one of a work's locations (source name "arXiv"); expose its abs page + PDF.
+function arxivLoc(w) {
+  const l = (w.locations || []).find(x => x && x.source && /arxiv/i.test(x.source.display_name || ''));
+  if (!l) return null;
+  const id = ((l.landing_page_url || l.pdf_url || '').match(/(\d{4}\.\d{4,5})(v\d+)?/) || [])[1];
+  return { abs: https(l.landing_page_url) || (id ? `https://arxiv.org/abs/${id}` : null), pdf: https(l.pdf_url) || (id ? `https://arxiv.org/pdf/${id}` : null), id };
+}
+// best free full-text: arXiv PDF first (clean), else OpenAlex's best OA copy.
+function freePdf(w) {
+  const ax = arxivLoc(w);
+  if (ax && ax.pdf) return ax.pdf;
+  const b = w.best_oa_location;
+  return b ? (https(b.pdf_url) || https(b.landing_page_url)) : null;
+}
 
 async function loadPaper(idOrDoi) {
   const ep = ++EPOCH;
@@ -40,7 +56,7 @@ async function panelSafe(promise, sel, msg) {
   catch (e) { console.warn(msg, e); $(sel).innerHTML = `<div class="empty">😵 ${esc(msg)}. (${esc(e.message)})</div>`; }
 }
 
-function workURL(w) { return w.doi || w.id || '#'; }
+function workURL(w) { return w.doi || (w.primary_location && w.primary_location.landing_page_url) || w.id || '#'; }
 
 /* Second-opinion citation count from Semantic Scholar (free, CORS-open, no key).
    Its corpus is broader than OpenAlex's, so it usually lands closer to Google Scholar. */
@@ -76,10 +92,14 @@ function renderHero(w) {
   const topic = w.primary_topic && w.primary_topic.display_name;
   const oaInfo = w.open_access || {};
   const oa = oaInfo.is_oa;
+  const ax = arxivLoc(w);
+  const pdf = freePdf(w);
   const oaTier = oa ? (oaInfo.oa_status && oaInfo.oa_status !== 'closed' ? oaInfo.oa_status + ' ' : '') + 'open access' : '';
+  // prefer arXiv abs, then OpenAlex's best OA landing, then oa_url (which can be a low-quality mirror)
+  const oaLink = (ax && ax.abs) || (w.best_oa_location && https(w.best_oa_location.landing_page_url)) || https(oaInfo.oa_url);
   const oaChip = oa
-    ? (oaInfo.oa_url
-      ? `<a class="chip oa" href="${esc(oaInfo.oa_url)}" target="_blank" rel="noopener" title="Free to read — ${esc(oaTier)}. Click to open the free copy.">🔓 ${esc(oaTier)} ↗</a>`
+    ? (oaLink
+      ? `<a class="chip oa" href="${esc(oaLink)}" target="_blank" rel="noopener" title="Free to read — ${esc(oaTier)}. Click to open the free copy.">🔓 ${esc(oaTier)} ↗</a>`
       : `<span class="chip oa" title="Free to read — ${esc(oaTier)}">🔓 ${esc(oaTier)}</span>`)
     : '';
   $('#hero').innerHTML = `
@@ -98,6 +118,8 @@ function renderHero(w) {
     </div>
     <div class="toolbar">
       <a class="tool" href="${esc(workURL(w))}" target="_blank" rel="noopener" title="Open the paper on its original site (publisher / DOI)">📄 original ↗</a>
+      ${ax && ax.abs ? `<a class="tool" href="${esc(ax.abs)}" target="_blank" rel="noopener" title="Open the arXiv preprint page">📚 arXiv ↗</a>` : ''}
+      ${!ax && pdf ? `<a class="tool" href="${esc(pdf)}" target="_blank" rel="noopener" title="Open the free full-text PDF (open access)">📥 PDF ↗</a>` : ''}
       <a class="tool" target="_blank" rel="noopener" href="https://scholar.google.com/scholar?q=${encodeURIComponent(w.doi ? w.doi.replace('https://doi.org/','') : '"' + w.display_name + '"')}" title="Open this paper on Google Scholar — Scholar has no API, so its count can't be shown here.">🎓 Scholar ↗</a>
       <button class="tool" id="bibBtn" title="Copy a ready-to-paste BibTeX entry for this paper">📋 BibTeX</button>
       <button class="tool" id="shareBtn" title="Copy a link that opens this exact dashboard">🔗 copy link</button>

@@ -189,7 +189,12 @@ async function posterData(w) {
       : Promise.resolve({ results: [] }),
     getJSON(`${API}/works?filter=cites:${wid}&group_by=authorships.countries`).catch(() => ({ group_by: [] })),
   ]);
-  const abstract = invAbstract(extra.abstract_inverted_index);
+  let abstract = invAbstract(extra.abstract_inverted_index);
+  let absSource = 'the public abstract';
+  if (!abstract) {                        // OpenAlex has no abstract — try the arXiv / Semantic Scholar record
+    const s2 = await s2Abstract(w);
+    if (s2) { abstract = s2.text; absSource = s2.src; }
+  }
   const keywords = (extra.keywords || []).filter(k => k.score == null || k.score > 0.3).slice(0, 8).map(k => k.display_name).filter(Boolean);
   const grants = (extra.funders || []).map(f => f.display_name).filter(Boolean);
   const refs = (refsJ.results || []).map(r => {
@@ -201,7 +206,24 @@ async function posterData(w) {
     .map(g => [String(g.key || '').replace(/.*\//, '').toUpperCase(), g.count])
     .filter(([cc]) => /^[A-Z]{2}$/.test(cc))
     .sort((a, b) => b[1] - a[1]);
-  return { abstract, keywords, grants, refs, countries };
+  return { abstract, absSource, keywords, grants, refs, countries };
+}
+
+/* arXiv's own API blocks browser fetches (no CORS); Semantic Scholar (CORS-open,
+   indexes arXiv) gives the same abstract. Only ever the paper's real abstract —
+   returns null for genuinely closed papers, so nothing is invented. */
+async function s2Abstract(w) {
+  const S2 = 'https://api.semanticscholar.org/graph/v1/paper';
+  const ax = (typeof arxivLoc === 'function') ? arxivLoc(w) : null;
+  let key = null, src = 'the Semantic Scholar record';
+  if (ax && ax.id) { key = `arXiv:${ax.id}`; src = 'the arXiv record'; }
+  else if (w.doi) { key = `DOI:${encodeURIComponent(w.doi.replace('https://doi.org/', ''))}`; }
+  if (!key) return null;
+  try {
+    const j = await getJSON(`${S2}/${key}?fields=abstract`);
+    const t = j && j.abstract;
+    return t && t.trim().length > 30 ? { text: t.trim(), src } : null;
+  } catch (e) { return null; }
 }
 
 /* ---------- studio ---------- */
@@ -253,7 +275,7 @@ function renderPoster(w, d) {
     <div class="pb-block pb-sec${flow ? ' pb-flow' : ''}">
       <div class="pb-head">${numbered ? `<span class="pb-num">${String(i + 1).padStart(2, '0')}</span>` : ''}<span contenteditable="true" spellcheck="false">${esc(s.head)}</span></div>
       <div class="pb-body" contenteditable="true" spellcheck="false" data-empty="${s.body ? 0 : 1}">${s.body ? esc(s.body) : 'OpenAlex doesn’t have this paper’s abstract on record, and PaperScope never invents text. Click here and paste or write your own — you’re probably the author anyway.'}</div>
-      ${sections ? '<div class="pb-src">auto-drafted from the public abstract — click any text to edit</div>' : ''}
+      ${sections ? `<div class="pb-src">auto-drafted from ${esc(d.absSource)} — click any text to edit</div>` : ''}
     </div>`).join('');
 
   board.innerHTML = `
