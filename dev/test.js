@@ -252,6 +252,8 @@ let srcDetail429 = 0;
   checks0.hintDaily = (await page.textContent('.hint')).includes('fresh examples daily');
   checks0.trendingSampled = await page.evaluate(() => performance.getEntriesByType('resource').some(r => r.name.includes('sample=6')));
   checks0.versionFooter = (await page.textContent('#verSticker')).trim();
+  checks0.feedbackLink = await page.getAttribute('.feedback', 'href');
+  checks0.feedbackOk = /^mailto:kartiksinghal36@gmail\.com\?subject=/.test(checks0.feedbackLink || '');
   await page.screenshot({ path: 'shot_home.png' });
 
   // autocomplete flow
